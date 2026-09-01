@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/venv/
+.pytest_cache/
+*.egg-info/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.vite/
+
+# Storage & Runtime Scratch
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+backend/storage/outputs/*
+!backend/storage/outputs/.gitkeep
+*.log
+.temp_*
+/tmp/*
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/

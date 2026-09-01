@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+
+# LuminaScale Control CLI
+APP_DIR="/home/atreya/Projects/ScaleUp"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ScaleUp"
+mkdir -p "$STATE_DIR"
+PID_FILE="$STATE_DIR/scaleup.pid"
+LOG_FILE="$STATE_DIR/scaleup.log"
+PORT="${PORT:-7756}"
+
+get_pid() {
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+    # Search by port
+    local port_pid
+    port_pid=$(lsof -ti :"$PORT" 2>/dev/null | head -n 1)
+    if [ -n "$port_pid" ] && kill -0 "$port_pid" 2>/dev/null; then
+        echo "$port_pid"
+        return 0
+    fi
+    return 1
+}
+
+start_bg() {
+    local existing_pid
+    existing_pid=$(get_pid)
+    if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
+        echo "⚡ LuminaScale is already running (PID: $existing_pid) on http://127.0.0.1:$PORT"
+        return 0
+    fi
+
+    echo "🚀 Starting LuminaScale in the background on port $PORT..."
+    cd "$APP_DIR"
+    
+    # Ensure venv and dist
+    if [ ! -d "backend/venv" ] || [ ! -d "frontend/dist" ]; then
+        echo "Initializing build dependencies..."
+        ./run.sh >/dev/null 2>&1 &
+        sleep 3
+    fi
+
+    export PYTHONPATH=backend
+    setsid "$APP_DIR/backend/venv/bin/uvicorn" app.main:app \
+        --app-dir backend \
+        --host 0.0.0.0 \
+        --port "$PORT" \
+        >> "$LOG_FILE" 2>&1 </dev/null &
+    
+    local new_pid=$!
+    echo "$new_pid" > "$PID_FILE"
+    
+    # Wait for startup
+    local retries=20
+    local ready=0
+    while [ $retries -gt 0 ]; do
+        if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+            ready=1
+            break
+        fi
+        sleep 0.25
+        retries=$((retries - 1))
+    done
+
+    if [ $ready -eq 1 ]; then
+        echo "✅ LuminaScale is live in the background!"
+        echo "   • URL:      http://127.0.0.1:$PORT"
+        echo "   • PID:      $new_pid"
+        echo "   • Logs:     $LOG_FILE"
+        echo "   • Hardware: AMD Radeon Vega 8 (RADV Vulkan)"
+    else
+        echo "⚠️  Service launched with PID: $new_pid. View logs with: ScaleUp logs"
+    fi
+}
+
+start_fg() {
+    local existing_pid
+    existing_pid=$(get_pid)
+    if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
+        echo "⚡ LuminaScale is already running in the background (PID: $existing_pid)."
+        echo "   Use 'ScaleUp stop' first, or open: http://127.0.0.1:$PORT"
+        exit 1
+    fi
+    cd "$APP_DIR"
+    export PORT="$PORT"
+    exec ./run.sh
+}
+
+stop_server() {
+    local target_pid
+    target_pid=$(get_pid)
+    if [ $? -eq 0 ] && [ -n "$target_pid" ]; then
+        echo "🛑 Stopping LuminaScale (PID: $target_pid)..."
+        kill "$target_pid" 2>/dev/null || true
+        sleep 1
+        if kill -0 "$target_pid" 2>/dev/null; then
+            kill -9 "$target_pid" 2>/dev/null || true
+        fi
+        rm -f "$PID_FILE"
+        echo "✅ Stopped LuminaScale."
+    else
+        echo "ℹ️  LuminaScale is not currently running."
+        rm -f "$PID_FILE"
+    fi
+}
+
+show_status() {
+    local running_pid
+    running_pid=$(get_pid)
+    if [ $? -eq 0 ] && [ -n "$running_pid" ]; then
+        echo "=================================================="
+        echo " LuminaScale Service Status: ACTIVE (RUNNING)"
+        echo "=================================================="
+        echo " • Status:   🟢 Running"
+        echo " • PID:      $running_pid"
+        echo " • URL:      http://127.0.0.1:$PORT"
+        echo " • Log File: $LOG_FILE"
+        
+        # Telemetry from API
+        if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+            local health
+            health=$(curl -s "http://127.0.0.1:$PORT/api/health")
+            local mem
+            mem=$(echo "$health" | grep -o '"process_memory_mb":[0-9.]*' | cut -d: -f2)
+            local gpu
+            gpu=$(echo "$health" | grep -o '"vulkan_device":"[^"]*"' | cut -d: -f2 | tr -d '"')
+            echo " • Memory:   ${mem} MB RSS (Budget: <= 2048 MB)"
+            echo " • Compute:  $gpu"
+        fi
+        echo "=================================================="
+    else
+        echo "=================================================="
+        echo " LuminaScale Service Status: INACTIVE (STOPPED)"
+        echo "=================================================="
+        echo " Start in background with: ScaleUp --bg"
+    fi
+}
+
+show_logs() {
+    if [ -f "$LOG_FILE" ]; then
+        echo "Streaming logs from $LOG_FILE (Ctrl+C to exit)..."
+        exec tail -f "$LOG_FILE"
+    else
+        echo "No log file found at $LOG_FILE"
+    fi
+}
+
+open_browser() {
+    local current_pid
+    current_pid=$(get_pid)
+    if [ $? -ne 0 ] || [ -z "$current_pid" ]; then
+        start_bg
+    fi
+    if which xdg-open >/dev/null 2>&1; then
+        xdg-open "http://127.0.0.1:$PORT" >/dev/null 2>&1 &
+    else
+        echo "Open in browser: http://127.0.0.1:$PORT"
+    fi
+}
+
+show_help() {
+    echo "LuminaScale CLI — Local Hardware-Accelerated AI Image Upscaler"
+    echo ""
+    echo "Usage:"
+    echo "  ScaleUp --bg          Start LuminaScale in the background on port $PORT"
+    echo "  ScaleUp               Start LuminaScale in the foreground"
+    echo "  ScaleUp status        Check service status, memory & GPU telemetry"
+    echo "  ScaleUp stop          Stop the background service"
+    echo "  ScaleUp restart       Restart the background service"
+    echo "  ScaleUp logs          Stream live server logs"
+    echo "  ScaleUp open          Open LuminaScale in your default web browser"
+    echo "  ScaleUp help          Display this help message"
+    echo ""
+}
+
+case "$1" in
+    --bg|-d|start)
+        start_bg
+        ;;
+    stop)
+        stop_server
+        ;;
+    restart)
+        stop_server
+        sleep 1
+        start_bg
+        ;;
+    status)
+        show_status
+        ;;
+    logs)
+        show_logs
+        ;;
+    open)
+        open_browser
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    "")
+        start_fg
+        ;;
+    *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+esac
