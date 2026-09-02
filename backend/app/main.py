@@ -62,7 +62,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("luminascale.api")
+logger = logging.getLogger("scaleup.api")
 
 
 async def periodic_cleanup_task():
@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     cleanup_task = asyncio.create_task(periodic_cleanup_task())
-    logger.info("LuminaScale backend initialized successfully")
+    logger.info("ScaleUp backend initialized successfully")
     yield
     # Shutdown
     cleanup_task.cancel()
@@ -93,11 +93,11 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         pass
-    logger.info("LuminaScale backend shut down")
+    logger.info("ScaleUp backend shut down")
 
 
 app = FastAPI(
-    title="LuminaScale AI Upscaler API",
+    title="ScaleUp AI Upscaler API",
     version="1.0.0-PROD",
     description="High-performance, hardware-accelerated local batch image upscaler using NCNN Vulkan.",
     lifespan=lifespan,

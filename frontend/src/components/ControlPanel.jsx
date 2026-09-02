@@ -300,11 +300,11 @@ export function ControlPanel({
         onClick={onStart}
         className="glow-cyan"
         style={{
-          padding: '0.9rem 1.5rem',
+          padding: '0.95rem 1.5rem',
           borderRadius: 'var(--radius-md)',
           border: 'none',
           background: stagedCount > 0 && !disabled
-            ? 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)'
+            ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #1d4ed8 100%)'
             : 'var(--bg-surface-raised)',
           color: stagedCount > 0 && !disabled ? '#ffffff' : 'var(--text-muted)',
           fontWeight: 700,
@@ -315,7 +315,7 @@ export function ControlPanel({
           justifyContent: 'center',
           gap: '0.6rem',
           transition: 'all 0.2s ease',
-          boxShadow: stagedCount > 0 && !disabled ? '0 4px 20px rgba(14, 165, 233, 0.4)' : 'none',
+          boxShadow: stagedCount > 0 && !disabled ? '0 4px 25px rgba(37, 99, 235, 0.45)' : 'none',
         }}
       >
         <Sparkles size={18} />

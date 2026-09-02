@@ -110,12 +110,12 @@ export default function App() {
                 width: '40px',
                 height: '40px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
+                background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
-                boxShadow: '0 0 20px rgba(14, 165, 233, 0.5)',
+                boxShadow: '0 0 25px rgba(37, 99, 235, 0.6)',
               }}
             >
               <Sparkles size={22} />
@@ -124,23 +124,24 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <h1
                   style={{
-                    fontSize: '1.25rem',
+                    fontSize: '1.3rem',
                     fontWeight: 800,
                     letterSpacing: '-0.02em',
-                    background: 'linear-gradient(90deg, #f8fafc 0%, #38bdf8 100%)',
+                    background: 'linear-gradient(90deg, #f0f6fc 0%, #60a5fa 50%, #38bdf8 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
                 >
-                  LuminaScale
+                  ScaleUp
                 </h1>
                 <span
                   style={{
                     fontSize: '0.68rem',
                     padding: '2px 6px',
                     borderRadius: '4px',
-                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                    color: 'var(--cyan-400)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.25)',
+                    color: 'var(--blue-300)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 700,
                   }}
@@ -148,7 +149,7 @@ export default function App() {
                   v1.0.0-PROD
                 </span>
               </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                 Local Hardware-Accelerated AI Image Upscaler (NCNN Vulkan)
               </p>
             </div>

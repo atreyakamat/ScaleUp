@@ -22,7 +22,7 @@ from app.models import (
 from app.engine import NCNNEngine
 from app.utils import create_batch_zip
 
-logger = logging.getLogger("luminascale.queue")
+logger = logging.getLogger("scaleup.queue")
 
 
 class JobContext:

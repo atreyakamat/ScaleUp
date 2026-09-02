@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# LuminaScale Control CLI
+# ScaleUp Control CLI
 APP_DIR="/home/atreya/Projects/ScaleUp"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ScaleUp"
 mkdir -p "$STATE_DIR"
@@ -31,11 +31,11 @@ start_bg() {
     local existing_pid
     existing_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
-        echo "⚡ LuminaScale is already running (PID: $existing_pid) on http://127.0.0.1:$PORT"
+        echo "⚡ ScaleUp is already running (PID: $existing_pid) on http://127.0.0.1:$PORT"
         return 0
     fi
 
-    echo "🚀 Starting LuminaScale in the background on port $PORT..."
+    echo "🚀 Starting ScaleUp in the background on port $PORT..."
     cd "$APP_DIR"
     
     # Ensure venv and dist
@@ -68,7 +68,7 @@ start_bg() {
     done
 
     if [ $ready -eq 1 ]; then
-        echo "✅ LuminaScale is live in the background!"
+        echo "✅ ScaleUp is live in the background!"
         echo "   • URL:      http://127.0.0.1:$PORT"
         echo "   • PID:      $new_pid"
         echo "   • Logs:     $LOG_FILE"
@@ -82,7 +82,7 @@ start_fg() {
     local existing_pid
     existing_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
-        echo "⚡ LuminaScale is already running in the background (PID: $existing_pid)."
+        echo "⚡ ScaleUp is already running in the background (PID: $existing_pid)."
         echo "   Use 'ScaleUp stop' first, or open: http://127.0.0.1:$PORT"
         exit 1
     fi
@@ -95,16 +95,16 @@ stop_server() {
     local target_pid
     target_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$target_pid" ]; then
-        echo "🛑 Stopping LuminaScale (PID: $target_pid)..."
+        echo "🛑 Stopping ScaleUp (PID: $target_pid)..."
         kill "$target_pid" 2>/dev/null || true
         sleep 1
         if kill -0 "$target_pid" 2>/dev/null; then
             kill -9 "$target_pid" 2>/dev/null || true
         fi
         rm -f "$PID_FILE"
-        echo "✅ Stopped LuminaScale."
+        echo "✅ Stopped ScaleUp."
     else
-        echo "ℹ️  LuminaScale is not currently running."
+        echo "ℹ️  ScaleUp is not currently running."
         rm -f "$PID_FILE"
     fi
 }
@@ -114,7 +114,7 @@ show_status() {
     running_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$running_pid" ]; then
         echo "=================================================="
-        echo " LuminaScale Service Status: ACTIVE (RUNNING)"
+        echo " ScaleUp Service Status: ACTIVE (RUNNING)"
         echo "=================================================="
         echo " • Status:   🟢 Running"
         echo " • PID:      $running_pid"
@@ -135,7 +135,7 @@ show_status() {
         echo "=================================================="
     else
         echo "=================================================="
-        echo " LuminaScale Service Status: INACTIVE (STOPPED)"
+        echo " ScaleUp Service Status: INACTIVE (STOPPED)"
         echo "=================================================="
         echo " Start in background with: ScaleUp --bg"
     fi
@@ -164,16 +164,16 @@ open_browser() {
 }
 
 show_help() {
-    echo "LuminaScale CLI — Local Hardware-Accelerated AI Image Upscaler"
+    echo "ScaleUp CLI — Local Hardware-Accelerated AI Image Upscaler"
     echo ""
     echo "Usage:"
-    echo "  ScaleUp --bg          Start LuminaScale in the background on port $PORT"
-    echo "  ScaleUp               Start LuminaScale in the foreground"
+    echo "  ScaleUp --bg          Start ScaleUp in the background on port $PORT"
+    echo "  ScaleUp               Start ScaleUp in the foreground"
     echo "  ScaleUp status        Check service status, memory & GPU telemetry"
     echo "  ScaleUp stop          Stop the background service"
     echo "  ScaleUp restart       Restart the background service"
     echo "  ScaleUp logs          Stream live server logs"
-    echo "  ScaleUp open          Open LuminaScale in your default web browser"
+    echo "  ScaleUp open          Open ScaleUp in your default web browser"
     echo "  ScaleUp help          Display this help message"
     echo ""
 }

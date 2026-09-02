@@ -1,0 +1,12 @@
+backend/venv/
+frontend/node_modules/
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+backend/storage/outputs/*
+!backend/storage/outputs/.gitkeep
+*.log
+.temp_*

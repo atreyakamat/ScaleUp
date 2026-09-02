@@ -1,0 +1,19 @@
+services:
+  scaleup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scaleup
+    restart: unless-stopped
+    ports:
+      - "7756:7756"
+    devices:
+      - "/dev/dri:/dev/dri" # Pass AMD / Intel GPU for Vulkan Hardware Acceleration
+    environment:
+      - PORT=7756
+    volumes:
+      - scaleup-storage:/app/backend/storage
+
+volumes:
+  scaleup-storage:
+    driver: local

@@ -15,7 +15,7 @@ from app.config import (
     DEFAULT_TILE_SIZE,
 )
 
-logger = logging.getLogger("luminascale.engine")
+logger = logging.getLogger("scaleup.engine")
 
 
 class InferenceResult:

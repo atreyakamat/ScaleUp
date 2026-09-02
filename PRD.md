@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-**Project Name:** LuminaScale (Local Batch AI Image Upscaler)
+**Project Name:** ScaleUp (Local Batch AI Image Upscaler)
 
 **Version:** 1.0.0-PROD
 

@@ -1,20 +1,26 @@
 :root {
-  --bg-main: #0b0f19;
-  --bg-surface: #111827;
-  --bg-surface-raised: #1e293b;
-  --bg-card: rgba(17, 24, 39, 0.75);
-  --border-subtle: #1e293b;
+  --bg-main: #050b17;
+  --bg-surface: #0a1428;
+  --bg-surface-raised: #11203d;
+  --bg-card: rgba(10, 20, 40, 0.85);
+  --border-subtle: rgba(56, 189, 248, 0.12);
   --border-active: #38bdf8;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #f0f6fc;
+  --text-secondary: #93b4d8;
+  --text-muted: #577399;
+  
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
   --cyan-400: #38bdf8;
   --cyan-500: #0ea5e9;
+  --indigo-400: #818cf8;
   --indigo-500: #6366f1;
-  --purple-500: #a855f7;
   --emerald-400: #34d399;
   --amber-400: #fbbf24;
   --rose-400: #f43f5e;
+  
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -35,9 +41,10 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background-image: 
-    radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 50%, rgba(168, 85, 247, 0.03) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.14) 0px, transparent 55%),
+    radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.16) 0px, transparent 55%),
+    radial-gradient(at 50% 30%, rgba(30, 58, 138, 0.22) 0px, transparent 65%),
+    radial-gradient(at 80% 10%, rgba(99, 102, 241, 0.1) 0px, transparent 40%);
   background-attachment: fixed;
 }
 
@@ -52,35 +59,36 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--bg-surface-raised);
   border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.1);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--blue-500);
 }
 
 /* Glassmorphism Classes */
 .glass-panel {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 189, 248, 0.12);
+  box-shadow: 0 8px 32px 0 rgba(2, 6, 23, 0.55);
 }
 
 .glass-panel-hover {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .glass-panel-hover:hover {
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.35);
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px 0 rgba(56, 189, 248, 0.1);
+  box-shadow: 0 14px 40px 0 rgba(14, 165, 233, 0.15), 0 0 15px rgba(37, 99, 235, 0.2);
 }
 
 /* Glow effects */
 .glow-cyan {
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.3), 0 0 40px rgba(37, 99, 235, 0.15);
 }
 .glow-indigo {
-  box-shadow: 0 0 25px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.35), 0 0 50px rgba(30, 58, 138, 0.25);
 }
 
 /* Animations */
@@ -105,18 +113,18 @@ body {
   100% { background-position: -200% 0; }
 }
 .progress-gradient {
-  background: linear-gradient(90deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+  background: linear-gradient(90deg, #0284c7 0%, #2563eb 50%, #38bdf8 100%);
   background-size: 200% 100%;
 }
 
-/* Checkerboard for transparent pngs */
+/* Blue-tinted Checkerboard for transparent images */
 .checkerboard-bg {
-  background-color: #161e2e;
+  background-color: #070e1e;
   background-image: 
-    linear-gradient(45deg, #1f293d 25%, transparent 25%), 
-    linear-gradient(-45deg, #1f293d 25%, transparent 25%), 
-    linear-gradient(45deg, transparent 75%, #1f293d 75%), 
-    linear-gradient(-45deg, transparent 75%, #1f293d 75%);
+    linear-gradient(45deg, #0d1830 25%, transparent 25%), 
+    linear-gradient(-45deg, #0d1830 25%, transparent 25%), 
+    linear-gradient(45deg, transparent 75%, #0d1830 75%), 
+    linear-gradient(-45deg, transparent 75%, #0d1830 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
 }
