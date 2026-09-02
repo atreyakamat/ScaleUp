@@ -10,6 +10,7 @@ RUN npm run build
 FROM python:3.11-slim-bookworm
 
 LABEL maintainer="ScaleUp Team"
+LABEL version="1.1.0"
 LABEL description="ScaleUp — Local Hardware-Accelerated AI Image Upscaler (NCNN Vulkan)"
 
 # Switch to HTTPS Debian repositories and install Vulkan compute runtime

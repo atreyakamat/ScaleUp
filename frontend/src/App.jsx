@@ -146,7 +146,7 @@ export default function App() {
                     fontWeight: 700,
                   }}
                 >
-                  v1.0.0-PROD
+                  v1.1.0
                 </span>
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>

@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ScaleUp AI Upscaler API",
-    version="1.0.0-PROD",
+    version="1.1.0",
     description="High-performance, hardware-accelerated local batch image upscaler using NCNN Vulkan.",
     lifespan=lifespan,
 )

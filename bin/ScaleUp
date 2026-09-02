@@ -1,12 +1,41 @@
 #!/usr/bin/env bash
 
-# ScaleUp Control CLI
+# ==============================================================================
+# ScaleUp CLI — Local Hardware-Accelerated AI Super-Resolution Controller
+# Version: 1.1.0-PROD
+# Target: AMD Ryzen 7 7730U | Radeon Vega 8 (RADV Vulkan) | Omarchy / Arch Linux
+# ==============================================================================
+
 APP_DIR="/home/atreya/Projects/ScaleUp"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ScaleUp"
 mkdir -p "$STATE_DIR"
 PID_FILE="$STATE_DIR/scaleup.pid"
 LOG_FILE="$STATE_DIR/scaleup.log"
 PORT="${PORT:-7756}"
+
+# ANSI Colors
+CLR_RESET="\033[0m"
+CLR_BOLD="\033[1m"
+CLR_DIM="\033[2m"
+CLR_CYAN="\033[38;2;56;189;248m"
+CLR_BLUE="\033[38;2;37;99;235m"
+CLR_INDIGO="\033[38;2;99;102;241m"
+CLR_GREEN="\033[38;2;52;211;153m"
+CLR_AMBER="\033[38;2;251;191;36m"
+CLR_ROSE="\033[38;2;244;63;94m"
+CLR_WHITE="\033[38;2;240;246;252m"
+
+print_banner() {
+    echo -e "${CLR_CYAN}${CLR_BOLD}"
+    echo "  ███████╗ ██████╗ █████╗ ██╗     ███████╗██╗   ██╗██████╗ "
+    echo "  ██╔════╝██╔════╝██╔══██╗██║     ██╔════╝██║   ██║██╔══██╗"
+    echo "  ███████╗██║     ███████║██║     █████╗  ██║   ██║██████╔╝"
+    echo "  ╚════██║██║     ██╔══██║██║     ██╔══╝  ██║   ██║██╔═══╝ "
+    echo "  ███████║╚██████╗██║  ██║███████╗███████╗╚██████╔╝██║     "
+    echo "  ╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     "
+    echo -e "${CLR_RESET}${CLR_DIM}  Local Hardware-Accelerated AI Image Upscaler • v1.1.0${CLR_RESET}"
+    echo ""
+}
 
 get_pid() {
     if [ -f "$PID_FILE" ]; then
@@ -31,18 +60,17 @@ start_bg() {
     local existing_pid
     existing_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
-        echo "⚡ ScaleUp is already running (PID: $existing_pid) on http://127.0.0.1:$PORT"
+        echo -e "${CLR_AMBER}⚡ ScaleUp is already active (PID: ${CLR_BOLD}$existing_pid${CLR_RESET}${CLR_AMBER}) on ${CLR_CYAN}http://127.0.0.1:$PORT${CLR_RESET}"
         return 0
     fi
 
-    echo "🚀 Starting ScaleUp in the background on port $PORT..."
+    echo -e "${CLR_CYAN}🚀 Launching ScaleUp background daemon on port ${CLR_BOLD}$PORT${CLR_RESET}${CLR_CYAN}...${CLR_RESET}"
     cd "$APP_DIR"
     
     # Ensure venv and dist
     if [ ! -d "backend/venv" ] || [ ! -d "frontend/dist" ]; then
-        echo "Initializing build dependencies..."
-        ./run.sh >/dev/null 2>&1 &
-        sleep 3
+        echo -e "${CLR_DIM}Initializing build dependencies and models...${CLR_RESET}"
+        ./scripts/seed.sh >/dev/null 2>&1
     fi
 
     export PYTHONPATH=backend
@@ -55,7 +83,7 @@ start_bg() {
     local new_pid=$!
     echo "$new_pid" > "$PID_FILE"
     
-    # Wait for startup
+    # Wait for startup healthcheck
     local retries=20
     local ready=0
     while [ $retries -gt 0 ]; do
@@ -68,13 +96,15 @@ start_bg() {
     done
 
     if [ $ready -eq 1 ]; then
-        echo "✅ ScaleUp is live in the background!"
-        echo "   • URL:      http://127.0.0.1:$PORT"
-        echo "   • PID:      $new_pid"
-        echo "   • Logs:     $LOG_FILE"
-        echo "   • Hardware: AMD Radeon Vega 8 (RADV Vulkan)"
+        echo -e "${CLR_GREEN}${CLR_BOLD}✅ ScaleUp is live in the background!${CLR_RESET}"
+        echo -e "   ${CLR_WHITE}• Web UI:     ${CLR_CYAN}${CLR_BOLD}http://127.0.0.1:$PORT${CLR_RESET}"
+        echo -e "   ${CLR_WHITE}• Process PID:${CLR_RESET} $new_pid"
+        echo -e "   ${CLR_WHITE}• Log Stream: ${CLR_RESET} $LOG_FILE"
+        echo -e "   ${CLR_WHITE}• Compute:    ${CLR_GREEN}AMD Radeon Vega 8 (RADV Vulkan 1.4)${CLR_RESET}"
+        echo ""
+        echo -e "   ${CLR_DIM}Quick tip: Type ${CLR_BOLD}ScaleUp open${CLR_RESET}${CLR_DIM} to view in your browser, or ${CLR_BOLD}ScaleUp logs${CLR_RESET}${CLR_DIM} to follow logs.${CLR_RESET}"
     else
-        echo "⚠️  Service launched with PID: $new_pid. View logs with: ScaleUp logs"
+        echo -e "${CLR_AMBER}⚠️  Service launched with PID: $new_pid. Verify logs with: ${CLR_BOLD}ScaleUp logs${CLR_RESET}"
     fi
 }
 
@@ -82,10 +112,11 @@ start_fg() {
     local existing_pid
     existing_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$existing_pid" ]; then
-        echo "⚡ ScaleUp is already running in the background (PID: $existing_pid)."
-        echo "   Use 'ScaleUp stop' first, or open: http://127.0.0.1:$PORT"
+        echo -e "${CLR_AMBER}⚡ ScaleUp is already running in the background (PID: $existing_pid).${CLR_RESET}"
+        echo -e "   Use '${CLR_BOLD}ScaleUp stop${CLR_RESET}' first, or open: ${CLR_CYAN}http://127.0.0.1:$PORT${CLR_RESET}"
         exit 1
     fi
+    print_banner
     cd "$APP_DIR"
     export PORT="$PORT"
     exec ./run.sh
@@ -95,31 +126,32 @@ stop_server() {
     local target_pid
     target_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$target_pid" ]; then
-        echo "🛑 Stopping ScaleUp (PID: $target_pid)..."
+        echo -e "${CLR_ROSE}🛑 Stopping ScaleUp background service (PID: $target_pid)...${CLR_RESET}"
         kill "$target_pid" 2>/dev/null || true
         sleep 1
         if kill -0 "$target_pid" 2>/dev/null; then
             kill -9 "$target_pid" 2>/dev/null || true
         fi
         rm -f "$PID_FILE"
-        echo "✅ Stopped ScaleUp."
+        echo -e "${CLR_GREEN}✅ Stopped ScaleUp.${CLR_RESET}"
     else
-        echo "ℹ️  ScaleUp is not currently running."
+        echo -e "${CLR_DIM}ℹ️  ScaleUp is not currently active.${CLR_RESET}"
         rm -f "$PID_FILE"
     fi
 }
 
 show_status() {
+    print_banner
     local running_pid
     running_pid=$(get_pid)
     if [ $? -eq 0 ] && [ -n "$running_pid" ]; then
-        echo "=================================================="
-        echo " ScaleUp Service Status: ACTIVE (RUNNING)"
-        echo "=================================================="
-        echo " • Status:   🟢 Running"
-        echo " • PID:      $running_pid"
-        echo " • URL:      http://127.0.0.1:$PORT"
-        echo " • Log File: $LOG_FILE"
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
+        echo -e " ${CLR_WHITE}${CLR_BOLD}ScaleUp Service Dashboard: ${CLR_GREEN}● ACTIVE (RUNNING)${CLR_RESET}"
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
+        echo -e " ${CLR_CYAN}• Status:${CLR_RESET}     ${CLR_GREEN}${CLR_BOLD}🟢 Running${CLR_RESET}"
+        echo -e " ${CLR_CYAN}• Process PID:${CLR_RESET}$running_pid"
+        echo -e " ${CLR_CYAN}• Web URL:${CLR_RESET}    ${CLR_BOLD}http://127.0.0.1:$PORT${CLR_RESET}"
+        echo -e " ${CLR_CYAN}• Logs:${CLR_RESET}       $LOG_FILE"
         
         # Telemetry from API
         if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
@@ -129,24 +161,95 @@ show_status() {
             mem=$(echo "$health" | grep -o '"process_memory_mb":[0-9.]*' | cut -d: -f2)
             local gpu
             gpu=$(echo "$health" | grep -o '"vulkan_device":"[^"]*"' | cut -d: -f2 | tr -d '"')
-            echo " • Memory:   ${mem} MB RSS (Budget: <= 2048 MB)"
-            echo " • Compute:  $gpu"
+            local scratch
+            scratch=$(echo "$health" | grep -o '"storage_usage_mb":[0-9.]*' | cut -d: -f2)
+            echo -e " ${CLR_CYAN}• Memory:${CLR_RESET}     ${CLR_GREEN}${mem} MB RSS${CLR_RESET} (Operational budget: <= 2048 MB)"
+            echo -e " ${CLR_CYAN}• Scratch:${CLR_RESET}    ${scratch} MB"
+            echo -e " ${CLR_CYAN}• GPU Driver:${CLR_RESET}${CLR_CYAN}$gpu${CLR_RESET}"
         fi
-        echo "=================================================="
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
     else
-        echo "=================================================="
-        echo " ScaleUp Service Status: INACTIVE (STOPPED)"
-        echo "=================================================="
-        echo " Start in background with: ScaleUp --bg"
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
+        echo -e " ${CLR_WHITE}${CLR_BOLD}ScaleUp Service Dashboard: ${CLR_ROSE}○ INACTIVE (STOPPED)${CLR_RESET}"
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
+        echo -e " ${CLR_DIM}To start in background:${CLR_RESET} ${CLR_CYAN}${CLR_BOLD}ScaleUp --bg${CLR_RESET}"
+        echo -e " ${CLR_DIM}To start in foreground:${CLR_RESET} ${CLR_CYAN}${CLR_BOLD}ScaleUp${CLR_RESET}"
+        echo -e "${CLR_BLUE}${CLR_BOLD}======================================================${CLR_RESET}"
     fi
+}
+
+show_models() {
+    print_banner
+    echo -e "${CLR_CYAN}${CLR_BOLD}🤖 Available Deep Learning Super-Resolution Models:${CLR_RESET}"
+    echo ""
+    echo -e "  ${CLR_BOLD}1. realesrgan-x4plus${CLR_RESET} ${CLR_CYAN}[PHOTO / GENERAL]${CLR_RESET}"
+    echo -e "     • Architecture: RRDBNet (999 layers)"
+    echo -e "     • Supported Scales: 2x, 4x (Default: 4x)"
+    echo -e "     • Ideal for: Real-world photos, textures, landscapes, organic details."
+    echo -e "     • Hardware Tile: 128px (Clamped for Vega 8 stability)"
+    echo ""
+    echo -e "  ${CLR_BOLD}2. realesrnet-x4plus${CLR_RESET} ${CLR_INDIGO}[DENOISE / SMOOTH]${CLR_RESET}"
+    echo -e "     • Architecture: RRDBNet (Denoising variant)"
+    echo -e "     • Supported Scales: 2x, 4x (Default: 4x)"
+    echo -e "     • Ideal for: Smooth gradient enhancement, cleaning compression noise."
+    echo -e "     • Hardware Tile: 64px (Ultra-safe shader footprint)"
+    echo ""
+    echo -e "  ${CLR_BOLD}3. realesrgan-x4plus-anime${CLR_RESET} ${CLR_AMBER}[ANIME / VECTOR / UI]${CLR_RESET}"
+    echo -e "     • Architecture: Compact CNN (268 layers)"
+    echo -e "     • Supported Scales: 4x (Default: 4x)"
+    echo -e "     • Ideal for: Anime art, manga, comics, digital drawings, icon assets."
+    echo -e "     • Hardware Tile: 128px / 256px"
+    echo ""
+    echo -e "  ${CLR_BOLD}4. realesr-animevideov3${CLR_RESET} ${CLR_GREEN}[ULTRA-FAST / THROUGHPUT]${CLR_RESET}"
+    echo -e "     • Architecture: Compact V3 (Low-latency)"
+    echo -e "     • Supported Scales: 2x, 3x, 4x (Default: 4x)"
+    echo -e "     • Ideal for: High-throughput batch workloads and rapid previews."
+    echo -e "     • Hardware Tile: Auto / 128px / 256px"
+    echo ""
+}
+
+show_health() {
+    echo -e "${CLR_CYAN}🔍 Running ScaleUp Hardware & API Diagnostic...${CLR_RESET}"
+    if ! curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+        echo -e "${CLR_ROSE}❌ ScaleUp server is not responding on port $PORT.${CLR_RESET}"
+        echo -e "   Start it first with: ${CLR_BOLD}ScaleUp --bg${CLR_RESET}"
+        return 1
+    fi
+    local res
+    res=$(curl -s "http://127.0.0.1:$PORT/api/health")
+    echo -e "${CLR_GREEN}✅ Server is Healthy and Active!${CLR_RESET}"
+    echo -e "$res" | grep -o '"[^"]*":[^,}]*' | sed 's/"//g' | while read -r line; do
+        echo -e "   • ${CLR_WHITE}$line${CLR_RESET}"
+    done
+}
+
+clean_scratch() {
+    echo -e "${CLR_CYAN}🧹 Purging ScaleUp temporary scratch and output archives...${CLR_RESET}"
+    if curl -sf -X POST "http://127.0.0.1:$PORT/api/system/cleanup?retention_hours=0" >/dev/null 2>&1; then
+        local res
+        res=$(curl -s -X POST "http://127.0.0.1:$PORT/api/system/cleanup?retention_hours=0")
+        echo -e "${CLR_GREEN}✅ Purge complete: $res${CLR_RESET}"
+    else
+        echo -e "${CLR_DIM}Server offline. Cleaning disk directories directly...${CLR_RESET}"
+        rm -rf "$APP_DIR/backend/storage/uploads"/* "$APP_DIR/backend/storage/outputs"/*
+        echo -e "${CLR_GREEN}✅ Direct disk cleanup complete.${CLR_RESET}"
+    fi
+}
+
+run_tests() {
+    print_banner
+    echo -e "${CLR_CYAN}🧪 Executing automated pytest test suite...${CLR_RESET}"
+    cd "$APP_DIR"
+    export PYTHONPATH=backend
+    backend/venv/bin/pytest backend/tests/ -v
 }
 
 show_logs() {
     if [ -f "$LOG_FILE" ]; then
-        echo "Streaming logs from $LOG_FILE (Ctrl+C to exit)..."
+        echo -e "${CLR_CYAN}📜 Streaming logs from ${CLR_BOLD}$LOG_FILE${CLR_RESET}${CLR_CYAN} (Press Ctrl+C to exit)...${CLR_RESET}"
         exec tail -f "$LOG_FILE"
     else
-        echo "No log file found at $LOG_FILE"
+        echo -e "${CLR_AMBER}No log file found at $LOG_FILE${CLR_RESET}"
     fi
 }
 
@@ -157,24 +260,48 @@ open_browser() {
         start_bg
     fi
     if which xdg-open >/dev/null 2>&1; then
+        echo -e "${CLR_CYAN}🌐 Opening ScaleUp in your default web browser...${CLR_RESET}"
         xdg-open "http://127.0.0.1:$PORT" >/dev/null 2>&1 &
     else
-        echo "Open in browser: http://127.0.0.1:$PORT"
+        echo -e "Open in browser: ${CLR_CYAN}${CLR_BOLD}http://127.0.0.1:$PORT${CLR_RESET}"
     fi
 }
 
 show_help() {
-    echo "ScaleUp CLI — Local Hardware-Accelerated AI Image Upscaler"
+    print_banner
+    echo -e "${CLR_BOLD}ScaleUp CLI — Comprehensive Command Reference & User Guide${CLR_RESET}"
     echo ""
-    echo "Usage:"
-    echo "  ScaleUp --bg          Start ScaleUp in the background on port $PORT"
-    echo "  ScaleUp               Start ScaleUp in the foreground"
-    echo "  ScaleUp status        Check service status, memory & GPU telemetry"
-    echo "  ScaleUp stop          Stop the background service"
-    echo "  ScaleUp restart       Restart the background service"
-    echo "  ScaleUp logs          Stream live server logs"
-    echo "  ScaleUp open          Open ScaleUp in your default web browser"
-    echo "  ScaleUp help          Display this help message"
+    echo -e "${CLR_CYAN}${CLR_BOLD}USAGE:${CLR_RESET}"
+    echo -e "  ${CLR_GREEN}ScaleUp${CLR_RESET} [COMMAND] [OPTIONS]"
+    echo ""
+    echo -e "${CLR_CYAN}${CLR_BOLD}PRIMARY COMMANDS:${CLR_RESET}"
+    echo -e "  ${CLR_BOLD}ScaleUp --bg${CLR_RESET} (or ${CLR_BOLD}-d${CLR_RESET}, ${CLR_BOLD}start${CLR_RESET})  Launch ScaleUp as a background daemon on port $PORT"
+    echo -e "  ${CLR_BOLD}ScaleUp${CLR_RESET}                       Launch ScaleUp in the foreground"
+    echo -e "  ${CLR_BOLD}ScaleUp status${CLR_RESET}                Display service status, PID, RAM RSS & GPU telemetry"
+    echo -e "  ${CLR_BOLD}ScaleUp open${CLR_RESET}                  Open the web application in your default browser"
+    echo -e "  ${CLR_BOLD}ScaleUp stop${CLR_RESET}                  Gracefully shut down the background server"
+    echo -e "  ${CLR_BOLD}ScaleUp restart${CLR_RESET}               Restart the background daemon"
+    echo -e "  ${CLR_BOLD}ScaleUp logs${CLR_RESET}                  Follow the real-time server output log stream"
+    echo ""
+    echo -e "${CLR_CYAN}${CLR_BOLD}DIAGNOSTIC & MANAGEMENT COMMANDS:${CLR_RESET}"
+    echo -e "  ${CLR_BOLD}ScaleUp models${CLR_RESET}                List all 4 AI super-resolution models & specifications"
+    echo -e "  ${CLR_BOLD}ScaleUp health${CLR_RESET}                Perform a real-time system & Vulkan healthcheck"
+    echo -e "  ${CLR_BOLD}ScaleUp clean${CLR_RESET}                 Purge temporary scratch files and batch archives"
+    echo -e "  ${CLR_BOLD}ScaleUp test${CLR_RESET}                  Run the automated end-to-end pytest test suite"
+    echo -e "  ${CLR_BOLD}ScaleUp help${CLR_RESET}                  Show this comprehensive help screen"
+    echo ""
+    echo -e "${CLR_CYAN}${CLR_BOLD}ENVIRONMENT VARIABLES:${CLR_RESET}"
+    echo -e "  ${CLR_BOLD}PORT${CLR_RESET}                          Server port (Default: ${CLR_BOLD}7756${CLR_RESET})"
+    echo ""
+    echo -e "${CLR_CYAN}${CLR_BOLD}EXAMPLES:${CLR_RESET}"
+    echo -e "  ${CLR_DIM}# Start ScaleUp in the background and open the browser:${CLR_RESET}"
+    echo -e "  ScaleUp --bg && ScaleUp open"
+    echo ""
+    echo -e "  ${CLR_DIM}# Check real-time RAM footprint and GPU accelerator:${CLR_RESET}"
+    echo -e "  ScaleUp status"
+    echo ""
+    echo -e "  ${CLR_DIM}# Inspect available AI models and their capabilities:${CLR_RESET}"
+    echo -e "  ScaleUp models"
     echo ""
 }
 
@@ -193,6 +320,18 @@ case "$1" in
     status)
         show_status
         ;;
+    models)
+        show_models
+        ;;
+    health)
+        show_health
+        ;;
+    clean)
+        clean_scratch
+        ;;
+    test)
+        run_tests
+        ;;
     logs)
         show_logs
         ;;
@@ -206,7 +345,8 @@ case "$1" in
         start_fg
         ;;
     *)
-        echo "Unknown option: $1"
+        echo -e "${CLR_ROSE}Unknown command: $1${CLR_RESET}"
+        echo ""
         show_help
         exit 1
         ;;
