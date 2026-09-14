@@ -1,51 +1,66 @@
-# ScaleUp — Local Batch AI Image Upscaler
+<p align="center">
+  <img src="assets/banner.svg" alt="ScaleUp Hero Banner" width="100%">
+</p>
 
-[![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4.354-red.svg)](https://www.vulkan.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-1.0.0-009688.svg)](https://fastapi.tiangolo.com/)
-[![React Vite](https://img.shields.io/badge/React-18-61dafb.svg)](https://vitejs.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![Hardware](https://img.shields.io/badge/Target-Ryzen%207%207730U%20%7C%20Vega%208-orange.svg)]()
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)]()
+<p align="center">
+  <a href="https://github.com/atreyakamat/ScaleUp/releases/tag/v1.1.0"><img src="https://img.shields.io/badge/Release-v1.1.0--PROD-38bdf8?style=for-the-badge&logo=github&logoColor=white" alt="Release"></a>
+  <a href="https://hub.docker.com/r/atreya7/scaleup"><img src="https://img.shields.io/badge/Docker_Hub-atreya7%2Fscaleup%3A1.1-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Hub"></a>
+  <a href="https://www.vulkan.org/"><img src="https://img.shields.io/badge/Vulkan-1.4.354-red?style=for-the-badge&logo=vulkan&logoColor=white" alt="Vulkan 1.4"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-1.1.0-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
+  <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/React_18-Vite_SPA-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="React 18"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License MIT"></a>
+</p>
 
-**ScaleUp** is a self-hosted, privacy-first local image enhancement and batch super-resolution application. Built with a dark-blue glassmorphic UI for Linux desktop environments (Arch Linux + Hyprland), it harnesses **NCNN-Vulkan** C++ compute to execute hardware-accelerated deep learning models directly on integrated and discrete AMD GPUs via Mesa's RADV driver.
+<p align="center">
+  <strong>ScaleUp</strong> is a self-hosted, privacy-first local image enhancement and batch super-resolution application. Built with a sleek dark-blue glassmorphic interface for Linux desktop power-users (Arch Linux + Hyprland), it harnesses <strong>NCNN-Vulkan C++ compute</strong> to execute deep learning models directly on integrated AMD Radeon GPUs (Vega 8 / RADV) and discrete graphics cards.
+</p>
 
-By bypassing heavy PyTorch runtimes, ScaleUp operates with an ultra-low memory footprint ($\le 120\text{ MB}$ API process RSS, dynamic tile clamping keeping GPU memory $\le 600\text{ MB}$ UMA), avoiding VRAM exhaustion and ensuring total desktop stability under Hyprland without killing user sessions.
+<p align="center">
+  <a href="#-quick-start--daily-usage">🚀 Quickstart</a> •
+  <a href="#-docker--docker-compose">🐳 Docker Deployment</a> •
+  <a href="#-performance-benchmarks--architectural-efficiency">⚡ Benchmarks</a> •
+  <a href="#-ai-model-registry--tiling-optimization">🤖 Model Matrix</a> •
+  <a href="#-api-reference">📡 API Specs</a> •
+  <a href="CONTRIBUTING.md">🤝 Contributing</a>
+</p>
 
 ---
 
-## 📑 Table of Contents
+## 💡 Why ScaleUp?
 
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Hardware & Runtime Operational Profile](#-hardware--runtime-operational-profile)
-- [Quick Start & Daily Usage](#-quick-start--daily-usage)
-  - [1. One-Click Bootstrap & Seed](#1-one-click-bootstrap--seed)
-  - [2. Background Daemon CLI (`ScaleUp`)](#2-background-daemon-cli-scaleup)
-  - [3. Run in Foreground](#3-run-in-foreground)
-  - [4. Docker & Docker Compose](#4-docker--docker-compose)
-- [Manual Step-by-Step Installation](#-manual-step-by-step-installation)
-- [AI Model Registry & Tiling Optimization](#-ai-model-registry--tiling-optimization)
-  - [Model Specifications](#model-specifications)
-  - [AMD Vega 8 Shader Buffer & Tiling Safeguards](#amd-vega-8-shader-buffer--tiling-safeguards)
-  - [Automatic Black-Image Detection & Recovery](#automatic-black-image-detection--recovery)
-- [Interactive Split Comparison & Gallery](#-interactive-split-comparison--gallery)
-- [API Reference](#-api-reference)
-- [Automated Test Suite](#-automated-test-suite)
-- [Systemd Service Setup](#-optional-systemd-service-setup)
-- [Troubleshooting & FAQ](#-troubleshooting--faq)
+Existing cloud upscalers (Magnific, ImgUpscaler, Topaz) demand recurring monthly subscriptions and upload your personal photos to third-party cloud servers. Meanwhile, local PyTorch-based implementations require 4GB–10GB of heavy Python runtime wheels, ROCm/CUDA drivers, and frequently exhaust shared memory on integrated GPUs, crashing the Wayland compositor.
+
+**ScaleUp solves this entirely:**
+- ⚡ **Zero PyTorch Dependency in Runtime:** Powered by bare-metal C++ NCNN Vulkan binary with FP16 half-precision compute.
+- 📉 **Ultra-Low Memory Footprint:** Operates under **$\sim 60\text{ MB}$ RAM** at idle and $\le 120\text{ MB}$ during active inference.
+- 🛡️ **Hyprland / Desktop Stability:** Enforces Vega 8 tile clamping ($\le 128\text{px}$) and dynamic pixel-extrema validation to prevent Vulkan shader workgroup buffer overflows and black output images.
+- 🔒 **100% Local & Air-Gapped:** Zero telemetry, no cloud accounts, and completely private.
+
+---
+
+## 📊 Performance & Efficiency Comparison
+
+| Metric | Traditional PyTorch / CUDA | Cloud Upscalers (e.g. Magnific) | **ScaleUp (NCNN Vulkan)** |
+| :--- | :--- | :--- | :--- |
+| **System RAM Footprint** | $4.2\text{ GB} - 8.5\text{ GB}$ | $0\text{ MB}$ (Runs on server) | **$\approx 59.8\text{ MB}$ RSS** |
+| **GPU VRAM / Buffer** | $3.5\text{ GB} - 6\text{ GB}$ VRAM | $0\text{ MB}$ | **$< 600\text{ MB}$ UMA (Dynamic)** |
+| **Cold Startup Time** | $14 - 28\text{ seconds}$ | Browser network latency | **$< 1.5\text{ seconds}$** |
+| **Hardware Requirement** | High-end NVIDIA / ROCm GPU | Internet connection | **AMD Vega 8 / Intel Xe / Any Vulkan** |
+| **Privacy & Security** | Local, but heavy dependencies | Images uploaded to cloud | **100% Offline & Air-gapped** |
+| **Cost** | Free (High electricity) | $\$19 - \$39\text{ / month}$ | **100% Free & MIT Licensed** |
 
 ---
 
 ## ⚡ Key Features
 
-- **🚀 Hardware Acceleration (NCNN Vulkan):** Zero PyTorch dependency in runtime; ultra-low memory footprint ($\sim 60\text{ MB}$ base RSS) running on AMD Radeon Vega 8 (RADV Renoir) with FP16 half-precision tensor compute.
-- **🌌 Modern Dark Blue UI:** Tailored sapphire-and-navy glassmorphism with responsive sliders, real-time metrics, interactive canvas, and smooth animations.
-- **🖼️ Multi-Format Support:** Ingestion and batch upscaling for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`.
+- **🚀 Bare-Metal NCNN Vulkan C++ Engine:** Accelerated inference on AMD Radeon Vega 8 (RADV Renoir) with FP16 shader math.
+- **🌌 Dark-Blue Glassmorphic UI:** Deep sapphire radial gradients, glowing cyan accents, responsive sliders, and fluid animations tailored for dark Linux desktops.
+- **🖼️ Comprehensive Image Format Support:** Seamless super-resolution for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`.
 - **🛡️ Pre-Flight Validation & Error Resilience:**
-  - Automatic rejection of 0-byte or corrupted image files without breaking the batch pipeline.
+  - Automatic rejection of 0-byte or corrupted image files without breaking batch queues.
   - Dimension inspection (>4K warning & tile auto-clamping).
-  - Dynamic GPU OOM / Black shader output recovery with automatic tile-reduction retry ($128\text{px} \to 64\text{px} \to 32\text{px}$).
-- **🤖 4 Pre-Trained Deep Learning Models:** Support for photorealistic (`realesrgan-x4plus`), denoising (`realesrnet-x4plus`), anime/vector art (`realesrgan-x4plus-anime`), and ultra-fast throughput (`realesr-animevideov3`).
+  - Dynamic GPU OOM / Black shader output recovery with automatic tile-halving fallback ($128\text{px} \to 64\text{px} \to 32\text{px}$).
+- **🤖 4 Pre-Trained Super-Resolution Models:** Photorealistic photos, smooth denoising, anime/manga art, and high-throughput video/batch upscaling.
 - **🔄 Real-Time Telemetry & Progress:** Non-blocking async queue delivering real-time item status, elapsed time, moving-average ETA, and Server-Sent Events (SSE) + JSON polling.
 - **🔍 Interactive Before/After Split Viewer:** Side-by-side comparison slider with 1x–4x zoom, click-and-drag panning, side-by-side mode, and instant full-resolution download.
 - **📦 Batch Export (.ZIP) & Auto-Cleanup:** Consolidated server-side ZIP packaging and automatic background pruning of scratch files older than 24 hours.
@@ -85,22 +100,11 @@ By bypassing heavy PyTorch runtimes, ScaleUp operates with an ultra-low memory f
 
 ---
 
-## 💻 Hardware & Runtime Operational Profile
-
-| Resource | Specification | Allocation / Budget | Role in Pipeline |
-| :--- | :--- | :--- | :--- |
-| **CPU** | AMD Ryzen 7 7730U (8 Cores / 16 Threads) | 2–4 Worker Threads (`-j 1:2:2`) | Image decode/encode (Pillow/OpenCV) & FastAPI event loop. |
-| **GPU / Driver** | AMD Radeon Graphics (RADV RENOIR, Vulkan 1.4.354) | Device ID `0` (`-g 0`) | Vulkan compute pipeline for tensor inference. |
-| **System RAM** | 16 GB DDR4/LPDDR4x (Shared UMA) | Max 1.5 GB allocated buffer (Budget: $\le 2048\text{ MB}$) | Shared system and video memory pool. |
-| **Storage / IO** | NVMe SSD on `ext4` / `btrfs` | Max 5 GB temporary scratch | Temporary staging for batch queues, outputs, and `.zip` bundles. |
-
----
-
 ## 🚀 Quick Start & Daily Usage
 
 ### 1. One-Click Bootstrap & Seed
 
-Clone the repository and run the automated seed script:
+Clone the repository and run the automated bootstrap pipeline:
 
 ```bash
 git clone https://github.com/atreyakamat/ScaleUp.git
@@ -109,7 +113,7 @@ cd ScaleUp
 ```
 
 The script will automatically:
-1. Create project directories (`uploads`, `outputs`, `models`).
+1. Initialize project directories (`uploads`, `outputs`, `models`).
 2. Download the pre-compiled `realesrgan-ncnn-vulkan` binary and extract all 4 AI models.
 3. Configure the Python virtualenv and install backend dependencies.
 4. Build the React frontend production distribution.
@@ -119,24 +123,56 @@ The script will automatically:
 
 ### 2. Background Daemon CLI (`ScaleUp`)
 
-Start ScaleUp in the background for daily use:
+Launch ScaleUp as a background service:
 
 ```bash
 ScaleUp --bg
 ```
 
-#### Management Commands:
+Open directly in your default browser:
+```bash
+ScaleUp open
+```
+
+Navigate to **`http://localhost:7756`** in your browser.
+
+#### Terminal Management Commands:
 
 ```bash
 ScaleUp --bg          # Start service in the background on port 7756
-ScaleUp status        # Check status, memory footprint & GPU telemetry
-ScaleUp open          # Open ScaleUp directly in your default web browser
-ScaleUp stop          # Stop background service
-ScaleUp restart       # Restart background service
-ScaleUp logs          # Stream live server logs (tail -f)
+ScaleUp status        # Real-time dashboard with PID, RAM RSS & GPU telemetry
+ScaleUp open          # Open ScaleUp in default web browser
+ScaleUp models        # List all 4 AI models, scales, and hardware tile specs
+ScaleUp health        # Run hardware & Vulkan diagnostic check
+ScaleUp clean         # Purge temporary scratch files and batch archives
+ScaleUp test          # Execute automated pytest test suite
+ScaleUp logs          # Stream live server output logs (tail -f)
+ScaleUp restart       # Restart the background daemon
+ScaleUp stop          # Stop the background service
+ScaleUp help          # Display comprehensive command reference
 ```
 
-Open **`http://localhost:7756`** in your browser.
+```text
+  ███████╗ ██████╗ █████╗ ██╗     ███████╗██╗   ██╗██████╗ 
+  ██╔════╝██╔════╝██╔══██╗██║     ██╔════╝██║   ██║██╔══██╗
+  ███████╗██║     ███████║██║     █████╗  ██║   ██║██████╔╝
+  ╚════██║██║     ██╔══██║██║     ██╔══╝  ██║   ██║██╔═══╝ 
+  ███████║╚██████╗██║  ██║███████╗███████╗╚██████╔╝██║     
+  ╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     
+  Local Hardware-Accelerated AI Image Upscaler • v1.1.0
+
+======================================================
+ ScaleUp Service Dashboard: ● ACTIVE (RUNNING)
+======================================================
+ • Status:     🟢 Running
+ • Process PID: 394282
+ • Web URL:    http://127.0.0.1:7756
+ • Logs:       /home/atreya/.local/state/ScaleUp/scaleup.log
+ • Memory:     59.75 MB RSS (Operational budget: <= 2048 MB)
+ • Scratch:    0.0 MB
+ • GPU Driver: AMD Radeon Graphics (RADV RENOIR)
+======================================================
+```
 
 ---
 
@@ -150,85 +186,34 @@ ScaleUp
 
 ---
 
-### 4. Docker & Docker Compose
+## 🐳 Docker & Docker Compose
 
-#### Option A: Docker Compose (GPU Accelerated)
+Pre-built Docker images are available on Docker Hub:
+
+### Option A: Docker Compose (GPU Passthrough)
 
 ```bash
 docker compose up -d
 ```
 
-#### Option B: Docker CLI
+### Option B: Docker CLI
 
 ```bash
-# Build Docker image
-docker build --network=host -t scaleup:latest .
-
-# Run container with AMD/Intel GPU passthrough
+# Pull and run from Docker Hub
 docker run -d \
   --name scaleup \
   --restart unless-stopped \
   -p 7756:7756 \
   --device /dev/dri:/dev/dri \
-  scaleup:latest
+  atreya7/scaleup:1.1
+```
+
+Or build locally:
+```bash
+docker build --network=host -t scaleup:1.1 .
 ```
 
 Access the UI at **`http://localhost:7756`**.
-
----
-
-## 🛠️ Manual Step-by-Step Installation
-
-If you prefer to set up each component manually:
-
-### 1. Prerequisites (Arch Linux)
-
-```bash
-# Install Vulkan runtime and drivers
-sudo pacman -S vulkan-radeon vulkan-tools libvulkan python nodejs npm
-
-# Verify AMD Radeon Vega 8 Vulkan device
-vulkaninfo --summary
-```
-
-### 2. Backend Setup & Model Download
-
-```bash
-mkdir -p backend/bin/models backend/storage/uploads backend/storage/outputs
-
-# Download NCNN Vulkan binary
-cd backend/bin
-curl -L -o realesrgan.zip https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
-unzip -q realesrgan.zip
-rm realesrgan.zip
-chmod +x realesrgan-ncnn-vulkan
-
-# Extract Real-ESRNet weights
-curl -sL https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.2/realesrgan-ncnn-vulkan-20210801-ubuntu.zip -o /tmp/v012.zip
-unzip -q -j /tmp/v012.zip "models/realesrnet-x4plus.*" -d models/
-rm -f /tmp/v012.zip
-
-cd ../..
-
-# Setup Python Virtual Environment
-python3 -m venv backend/venv
-backend/venv/bin/pip install -r backend/requirements.txt
-```
-
-### 3. Frontend Build
-
-```bash
-cd frontend
-npm install
-npm run build
-cd ..
-```
-
-### 4. Start Server
-
-```bash
-PORT=7756 PYTHONPATH=backend backend/venv/bin/uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 7756
-```
 
 ---
 
@@ -297,12 +282,25 @@ ScaleUp includes an interactive inspection suite:
 ScaleUp includes an automated test suite verifying health endpoints, model registries, multi-file batch execution, 0-byte corrupt image rejection, signal cancellation, and ZIP exports:
 
 ```bash
+ScaleUp test
+# or
 PYTHONPATH=backend backend/venv/bin/pytest backend/tests/ -v
+```
+
+```text
+backend/tests/test_api.py::test_health_endpoint[asyncio] PASSED          [ 16%]
+backend/tests/test_api.py::test_models_endpoint[asyncio] PASSED          [ 33%]
+backend/tests/test_api.py::test_batch_upload_and_processing[asyncio] PASSED [ 50%]
+backend/tests/test_api.py::test_corrupt_and_zero_byte_rejection[asyncio] PASSED [ 66%]
+backend/tests/test_api.py::test_cancellation[asyncio] PASSED             [ 83%]
+backend/tests/test_api.py::test_cleanup_and_delete[asyncio] PASSED       [100%]
+
+============================== 6 passed in 1.95s ===============================
 ```
 
 ---
 
-## ⚙️ (Optional) Systemd Service Setup
+## ⚙️ (Optional) Systemd User Service Setup
 
 To run ScaleUp automatically on system startup:
 
@@ -346,10 +344,16 @@ ScaleUp logs
 ```
 
 #### 4. How are old temporary files cleaned up?
-An automated background task runs hourly to purge upload/output directories older than 24 hours. You can also trigger an immediate purge with `POST /api/system/cleanup` or via the **Clean** button in the web UI.
+An automated background task runs hourly to purge upload/output directories older than 24 hours. You can also trigger an immediate purge with `ScaleUp clean` or via the **Clean** button in the web UI.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please check out [**CONTRIBUTING.md**](CONTRIBUTING.md) for development setup guidelines, code standards, and the pull request checklist.
 
 ---
 
 ## 📄 License
 
-MIT License — free for personal, commercial, and open-source use.
+This project is licensed under the MIT License — see the [**LICENSE**](LICENSE) file for details.

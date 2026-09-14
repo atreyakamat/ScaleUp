@@ -1,0 +1,69 @@
+name: "🐛 Bug Report"
+description: File a bug report or error encountered in ScaleUp
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue with ScaleUp! Please provide details to help diagnose the issue.
+  - type: input
+    id: environment
+    attributes:
+      label: System Environment
+      description: OS distribution, window manager / desktop environment, and kernel version.
+      placeholder: e.g. Arch Linux (Omarchy), Hyprland, Linux 6.10
+    validations:
+      required: true
+  - type: dropdown
+    id: gpu_device
+    attributes:
+      label: GPU & Driver
+      description: Which GPU and Vulkan driver are you using?
+      options:
+        - "AMD Radeon Vega 8 (RADV / Mesa)"
+        - "AMD Radeon Discrete GPU (RDNA2/RDNA3 - RADV)"
+        - "AMD Radeon (AMDGPU-PRO)"
+        - "Intel Iris Xe / Arc (ANV / Mesa)"
+        - "NVIDIA (Proprietary Vulkan Driver)"
+        - "CPU / Lavapipe (Software Vulkan)"
+        - "Other (Specify in description)"
+    validations:
+      required: true
+  - type: dropdown
+    id: model_used
+    attributes:
+      label: Model & Scale Factor
+      description: Which model triggered the issue?
+      options:
+        - "realesrgan-x4plus (4x)"
+        - "realesrnet-x4plus (4x)"
+        - "realesrgan-x4plus-anime (4x)"
+        - "realesr-animevideov3 (2x/3x/4x)"
+        - "All Models / General API"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: What steps led to the bug?
+      placeholder: |
+        1. Staged an image with dimensions 3840x2160 (.png)
+        2. Selected realesrgan-x4plus with tile size 200px
+        3. Clicked 'Upscale'
+    validations:
+      required: true
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior vs Expected Behavior
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Server Logs
+      description: Run `ScaleUp logs` or inspect `~/.local/state/ScaleUp/scaleup.log`.
+      render: shell

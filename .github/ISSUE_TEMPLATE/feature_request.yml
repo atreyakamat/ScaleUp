@@ -1,0 +1,28 @@
+name: "💡 Feature Request"
+description: Propose a new feature, super-resolution model, or enhancement
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We love community ideas! Share your thoughts on how to improve ScaleUp.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature or model you are proposing.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation & Problem Statement
+      description: Why would this be useful? What problem does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
