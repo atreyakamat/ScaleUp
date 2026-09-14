@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-export function useBatchJob() {
+export function useBatchJob(apiUrl = '') {
   const [jobState, setJobState] = useState({
     jobId: null,
     status: 'IDLE', // IDLE | STAGED | UPLOADING | PROCESSING | COMPLETED | PARTIAL_FAILURE | CANCELLED | FAILED
@@ -37,7 +37,8 @@ export function useBatchJob() {
 
   const pollJobStatus = useCallback(async (jobId) => {
     try {
-      const res = await fetch(`/api/jobs/${jobId}`);
+      const endpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}` : `/api/jobs/${jobId}`;
+      const res = await fetch(endpoint);
       if (!res.ok) return;
       const data = await res.json();
 
@@ -53,30 +54,30 @@ export function useBatchJob() {
         cleanupConnections();
       }
     } catch (err) {
-      console.error('Polling error:', err);
+      console.warn('Polling error:', err);
     }
-  }, [cleanupConnections]);
+  }, [apiUrl, cleanupConnections]);
 
   const subscribeToJob = useCallback((jobId) => {
     cleanupConnections();
+    const streamEndpoint = apiUrl ? `${apiUrl}/api/jobs/${jobId}/events` : `/api/jobs/${jobId}/events`;
 
     try {
-      const es = new EventSource(`/api/jobs/${jobId}/events`);
+      const es = new EventSource(streamEndpoint);
       eventSourceRef.current = es;
 
-      const handleUpdate = (event) => {
+      es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          const currentStatus = data.status.toUpperCase();
           setJobState((prev) => ({
             ...prev,
-            status: currentStatus,
+            status: data.status.toUpperCase(),
             progress: data.progress,
             items: data.items,
             warnings: data.warnings || [],
           }));
 
-          if (['COMPLETED', 'PARTIAL_FAILURE', 'FAILED', 'CANCELLED'].includes(currentStatus)) {
+          if (['COMPLETED', 'PARTIAL_FAILURE', 'FAILED', 'CANCELLED'].includes(data.status.toUpperCase())) {
             cleanupConnections();
           }
         } catch (e) {
@@ -84,68 +85,62 @@ export function useBatchJob() {
         }
       };
 
-      es.addEventListener('init', handleUpdate);
-      es.addEventListener('start', handleUpdate);
-      es.addEventListener('item_start', handleUpdate);
-      es.addEventListener('item_done', handleUpdate);
-      es.addEventListener('item_skip', handleUpdate);
-      es.addEventListener('complete', handleUpdate);
-      es.addEventListener('cancelled', handleUpdate);
-
       es.onerror = () => {
-        // Fallback to polling if SSE fails
-        cleanupConnections();
-        pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 1000);
+        es.close();
+        eventSourceRef.current = null;
+        if (!pollIntervalRef.current) {
+          pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 1500);
+        }
       };
     } catch (err) {
-      // Direct polling fallback
-      pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 1000);
+      console.warn('SSE initiation failed, using polling fallback:', err);
+      pollIntervalRef.current = setInterval(() => pollJobStatus(jobId), 1500);
     }
-  }, [cleanupConnections, pollJobStatus]);
+  }, [apiUrl, cleanupConnections, pollJobStatus]);
 
   const startBatch = async (files, config) => {
-    cleanupConnections();
-    setJobState({
-      jobId: null,
+    if (!files || files.length === 0) return;
+
+    setJobState((prev) => ({
+      ...prev,
       status: 'UPLOADING',
+      error: null,
+      warnings: [],
+      items: [],
       progress: {
         current_index: 0,
         total_items: files.length,
         percentage: 0,
-        current_file: 'Uploading payload...',
+        current_file: 'Preparing batch ingest...',
         elapsed_seconds: 0,
         eta_seconds: null,
       },
-      items: [],
-      warnings: [],
-      error: null,
-    });
-
-    const formData = new FormData();
-    for (const f of files) {
-      formData.append('files', f);
-    }
-    formData.append('model', config.model);
-    formData.append('scale', config.scale.toString());
-    formData.append('tile_size', config.tile_size.toString());
-    formData.append('threads', config.threads || '1:2:2');
+    }));
 
     try {
-      const res = await fetch('/api/jobs/batch', {
+      const formData = new FormData();
+      files.forEach((file) => formData.append('files', file));
+      formData.append('model', config.model);
+      formData.append('scale', config.scale);
+      formData.append('tile_size', config.tile_size);
+      formData.append('threads', config.threads || '1:2:2');
+
+      const batchEndpoint = apiUrl ? `${apiUrl}/api/jobs/batch` : '/api/jobs/batch';
+      const res = await fetch(batchEndpoint, {
         method: 'POST',
         body: formData,
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: 'Failed to start batch job' }));
-        throw new Error(errorData.detail || 'Server rejected batch request');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Batch ingestion failed');
       }
 
       const data = await res.json();
       setJobState((prev) => ({
         ...prev,
         jobId: data.job_id,
-        status: 'PROCESSING',
+        status: data.status.toUpperCase(),
         warnings: data.warnings || [],
       }));
 
@@ -162,22 +157,19 @@ export function useBatchJob() {
   const cancelBatch = async () => {
     if (!jobState.jobId) return;
     try {
-      await fetch(`/api/jobs/${jobState.jobId}/cancel`, { method: 'POST' });
-      setJobState((prev) => ({
-        ...prev,
-        status: 'CANCELLED',
-      }));
+      const cancelEndpoint = apiUrl ? `${apiUrl}/api/jobs/${jobState.jobId}/cancel` : `/api/jobs/${jobState.jobId}/cancel`;
+      await fetch(cancelEndpoint, { method: 'POST' });
     } catch (err) {
-      console.error('Failed to cancel job:', err);
+      console.error('Cancel request failed:', err);
     }
   };
 
   const exportZip = () => {
     if (!jobState.jobId) return;
-    const downloadUrl = `/api/jobs/${jobState.jobId}/export`;
+    const exportEndpoint = apiUrl ? `${apiUrl}/api/jobs/${jobState.jobId}/export` : `/api/jobs/${jobState.jobId}/export`;
     const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `upscaled_batch_${jobState.jobId}.zip`;
+    link.href = exportEndpoint;
+    link.download = `scaleup_${jobState.jobId}.zip`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -203,7 +195,12 @@ export function useBatchJob() {
   };
 
   return {
-    ...jobState,
+    jobId: jobState.jobId,
+    status: jobState.status,
+    progress: jobState.progress,
+    items: jobState.items,
+    warnings: jobState.warnings,
+    error: jobState.error,
     startBatch,
     cancelBatch,
     exportZip,

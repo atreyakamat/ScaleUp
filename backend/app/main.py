@@ -368,3 +368,12 @@ async def trigger_manual_cleanup(retention_hours: int = 24):
         "pruned_directories": pruned,
         "remaining_storage_mb": get_storage_usage_mb(),
     }
+
+
+if FRONTEND_DIST.exists():
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
+    async def serve_static_or_spa(full_path: str):
+        target_file = FRONTEND_DIST / full_path
+        if target_file.is_file():
+            return FileResponse(target_file)
+        return FileResponse(FRONTEND_DIST / "index.html")
