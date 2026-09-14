@@ -260,31 +260,37 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
                   justifyContent: 'center',
                 }}
               >
-                {hasOutput ? (
-                  <img
-                    src={item.preview_url}
-                    alt={item.upscaled_name || item.original_name}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      transition: 'transform 0.3s ease',
-                    }}
-                  />
-                ) : item.original_url ? (
-                  <img
-                    src={item.original_url}
-                    alt={item.original_name}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      opacity: item.status === 'skipped_invalid' ? 0.35 : 0.7,
-                    }}
-                  />
-                ) : (
-                  <div style={{ color: 'var(--text-muted)' }}>No Preview</div>
-                )}
+                {(() => {
+                  if (hasOutput) {
+                    return (
+                      <img
+                        src={item.preview_url}
+                        alt={item.upscaled_name || item.original_name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          transition: 'transform 0.3s ease',
+                        }}
+                      />
+                    );
+                  }
+                  if (item.original_url) {
+                    return (
+                      <img
+                        src={item.original_url}
+                        alt={item.original_name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          opacity: item.status === 'skipped_invalid' ? 0.35 : 0.7,
+                        }}
+                      />
+                    );
+                  }
+                  return <div style={{ color: 'var(--text-muted)' }}>No Preview</div>;
+                })()}
 
                 {/* Status Badge overlay */}
                 <div style={{ position: 'absolute', top: '10px', right: '10px' }}>

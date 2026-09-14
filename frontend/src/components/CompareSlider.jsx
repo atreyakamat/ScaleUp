@@ -98,6 +98,12 @@ export function CompareSlider({ item, onClose }) {
     setPan({ x: 0, y: 0 });
   };
 
+  const getPanCursor = () => {
+    if (zoom <= 1) return 'default';
+    if (isPanning) return 'grabbing';
+    return 'grab';
+  };
+
   return (
     <div
       style={{
@@ -314,6 +320,8 @@ export function CompareSlider({ item, onClose }) {
       {/* Main Comparison Canvas Viewport */}
       <div
         ref={containerRef}
+        role="region"
+        aria-label="Image comparison viewport"
         onMouseDown={handlePanStart}
         style={{
           flex: 1,
@@ -322,7 +330,7 @@ export function CompareSlider({ item, onClose }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default',
+          cursor: getPanCursor(),
         }}
       >
         {viewMode === 'slider' && (
@@ -398,6 +406,16 @@ export function CompareSlider({ item, onClose }) {
             {/* Draggable Divider Handle Line */}
             {!holdOriginal && (
               <div
+                role="slider"
+                tabIndex={0}
+                aria-label="Image comparison split slider"
+                aria-valuenow={Math.round(sliderPos)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowLeft') setSliderPos((p) => Math.max(0, p - 5));
+                  if (e.key === 'ArrowRight') setSliderPos((p) => Math.min(100, p + 5));
+                }}
                 className="slider-handle"
                 onMouseDown={handlePointerDown}
                 style={{

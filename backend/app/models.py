@@ -125,8 +125,8 @@ class BatchCreateResponse(BaseModel):
 class SystemHealthResponse(BaseModel):
     status: str
     binary_available: bool
-    binary_path: Optional[str]
-    vulkan_device: Optional[str]
+    binary_path: Optional[str] = None
+    vulkan_device: Optional[str] = None
     available_models: List[str]
     storage_usage_mb: float
     process_memory_mb: float

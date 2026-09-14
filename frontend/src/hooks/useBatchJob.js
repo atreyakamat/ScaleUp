@@ -172,7 +172,7 @@ export function useBatchJob(apiUrl = '') {
     link.download = `scaleup_${jobState.jobId}.zip`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
   };
 
   const reset = () => {

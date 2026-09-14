@@ -69,7 +69,7 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
       const is4K = dimensions && dimensions.width * dimensions.height > 3840 * 2160;
 
       newStaged.push({
-        id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+        id: `${file.name}-${file.size}-${Date.now()}-${crypto.randomUUID()}`,
         file,
         previewUrl,
         dimensions,
@@ -135,6 +135,15 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Drop Target Area */}
       <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-label="Upload image dropzone"
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}

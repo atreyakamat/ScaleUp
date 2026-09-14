@@ -23,7 +23,7 @@ def sanitize_filename(filename: str) -> str:
     """Sanitizes filename against directory traversal and dangerous characters."""
     clean = os.path.basename(filename)
     clean = re.sub(r'[\r\n\t\0]', '', clean)
-    clean = re.sub(r'[^\w\.\-\_ ]', '_', clean)
+    clean = re.sub(r'[^\w.\- ]', '_', clean)
     if not clean:
         clean = f"image_{int(time.time()*1000)}"
     return clean
@@ -104,24 +104,25 @@ def create_batch_zip(job_id: str, output_files: List[Tuple[Path, str]], output_d
     return zip_path
 
 
+def _is_dir_stale(item: Path, cutoff: float) -> bool:
+    try:
+        return item.is_dir() and item.stat().st_mtime < cutoff
+    except OSError:
+        return False
+
+
 def cleanup_stale_jobs(retention_hours: int = RETENTION_HOURS) -> int:
     """Purges job folders older than retention_hours from uploads and outputs."""
-    now = time.time()
-    cutoff = now - (retention_hours * 3600)
+    cutoff = time.time() - (retention_hours * 3600)
     pruned_count = 0
 
     for base_dir in [UPLOADS_DIR, OUTPUTS_DIR]:
         if not base_dir.exists():
             continue
         for item in base_dir.iterdir():
-            if item.is_dir():
-                try:
-                    mtime = item.stat().st_mtime
-                    if mtime < cutoff:
-                        shutil.rmtree(item, ignore_errors=True)
-                        pruned_count += 1
-                except Exception:
-                    pass
+            if _is_dir_stale(item, cutoff):
+                shutil.rmtree(item, ignore_errors=True)
+                pruned_count += 1
 
     return pruned_count
 

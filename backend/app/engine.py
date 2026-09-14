@@ -64,18 +64,49 @@ class NCNNEngine:
         if cancel_event and cancel_event.is_set():
             return InferenceResult(success=False, error_message="Job was cancelled")
 
-        # Clamp tile size to hardware-safe limits on AMD Vega 8 iGPU
-        current_tile = tile_size
-        if model_name == "realesrnet-x4plus":
-            # Real-ESRNet requires <= 64px tiles on Vega 8 to avoid Vulkan shader overflow
-            if current_tile == 0 or current_tile > 64:
-                current_tile = 64
-        elif model_name == "realesrgan-x4plus":
-            # Real-ESRGAN x4plus requires <= 128px tiles on Vega 8
-            if current_tile == 0 or current_tile > 128:
-                current_tile = 128
+    @staticmethod
+    def _clamp_tile_size(model_name: str, tile_size: int) -> int:
+        if model_name == "realesrnet-x4plus" and (tile_size == 0 or tile_size > 64):
+            return 64
+        if model_name == "realesrgan-x4plus" and (tile_size == 0 or tile_size > 128):
+            return 128
+        return tile_size
 
-        # First attempt
+    @staticmethod
+    def _is_image_black(image_path: Path) -> bool:
+        if not image_path.exists():
+            return False
+        try:
+            with Image.open(image_path) as img:
+                ext = img.getextrema()
+                if isinstance(ext, tuple) and len(ext) > 0:
+                    if isinstance(ext[0], tuple):  # Multi-channel
+                        return all(ch_max == 0 for _, ch_max in ext[:3])
+                    return ext[1] == 0
+        except Exception:
+            return False
+        return False
+
+    async def upscale_image(
+        self,
+        input_path: Path,
+        output_path: Path,
+        model_name: str = "realesrgan-x4plus",
+        scale: int = 4,
+        tile_size: int = DEFAULT_TILE_SIZE,
+        gpu_id: int = DEFAULT_GPU_ID,
+        threads: str = DEFAULT_THREADS,
+        cancel_event: Optional[asyncio.Event] = None,
+    ) -> InferenceResult:
+        """
+        Executes NCNN Vulkan upscale inference on input_path -> output_path.
+        Includes automatic model tile clamping and black-image detection recovery.
+        """
+        if cancel_event and cancel_event.is_set():
+            return InferenceResult(success=False, error_message="Job was cancelled")
+
+        current_tile = self._clamp_tile_size(model_name, tile_size)
+
         res = await self._run_subprocess(
             input_path=input_path,
             output_path=output_path,
@@ -87,55 +118,33 @@ class NCNNEngine:
             cancel_event=cancel_event,
         )
 
-        # Check if output is all black (caused by Vulkan workgroup buffer overflow)
-        is_all_black = False
-        if res.success and output_path.exists():
-            try:
-                with Image.open(output_path) as img:
-                    ext = img.getextrema()
-                    if isinstance(ext, tuple) and len(ext) > 0:
-                        if isinstance(ext[0], tuple):  # Multi-channel
-                            is_all_black = all(ch_max == 0 for _, ch_max in ext[:3])
-                        else:
-                            is_all_black = (ext[1] == 0)
-            except Exception:
-                pass
-
-        if is_all_black:
+        if res.success and self._is_image_black(output_path):
             logger.warning(
                 f"Vulkan output produced all-black image at tile_size={current_tile}. Triggering adaptive tile reduction..."
             )
             res.success = False
             res.error_message = "Vulkan shader buffer overflow (all black output)"
 
-        if res.success:
+        if res.success or current_tile <= 32 or (cancel_event and cancel_event.is_set()):
             return res
 
-        # Recovery strategy: Retry with reduced tile size (64 or 32)
-        if current_tile > 32 and not (cancel_event and cancel_event.is_set()):
-            new_tile = 64 if current_tile > 64 else 32
-            logger.warning(
-                f"Halving tile size from {current_tile} to {new_tile} to recover valid image output..."
-            )
-            if output_path.exists():
-                try:
-                    output_path.unlink()
-                except Exception:
-                    pass
+        new_tile = 64 if current_tile > 64 else 32
+        logger.warning(f"Halving tile size from {current_tile} to {new_tile} to recover valid image output...")
+        output_path.unlink(missing_ok=True)
 
-            retry_res = await self._run_subprocess(
-                input_path=input_path,
-                output_path=output_path,
-                model_name=model_name,
-                scale=scale,
-                tile_size=new_tile,
-                gpu_id=gpu_id,
-                threads=threads,
-                cancel_event=cancel_event,
-            )
-            if retry_res.success:
-                logger.info(f"Recovery succeeded at tile_size={new_tile}")
-                return retry_res
+        retry_res = await self._run_subprocess(
+            input_path=input_path,
+            output_path=output_path,
+            model_name=model_name,
+            scale=scale,
+            tile_size=new_tile,
+            gpu_id=gpu_id,
+            threads=threads,
+            cancel_event=cancel_event,
+        )
+        if retry_res.success:
+            logger.info(f"Recovery succeeded at tile_size={new_tile}")
+            return retry_res
 
         return res
 

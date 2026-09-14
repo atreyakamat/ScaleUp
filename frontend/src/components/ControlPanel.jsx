@@ -101,18 +101,21 @@ export function ControlPanel({
 
       {/* Model Selection */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
           AI Upscaling Model
-        </label>
+        </span>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
           {models.map((m) => {
             const isSelected = config.model === m.id;
             return (
-              <div
+              <button
+                type="button"
                 key={m.id}
                 onClick={() => !disabled && handleModelChange(m.id)}
                 style={{
+                  textAlign: 'left',
+                  font: 'inherit',
                   padding: '0.9rem',
                   borderRadius: 'var(--radius-md)',
                   border: isSelected
@@ -148,7 +151,7 @@ export function ControlPanel({
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>
                   {m.description}
                 </p>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -158,13 +161,21 @@ export function ControlPanel({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
         {/* Scale Multiplier */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             Scale Multiplier
-          </label>
+          </span>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {[2, 3, 4].map((scaleFactor) => {
               const isSupported = selectedModel?.scales?.includes(scaleFactor);
               const isSelected = config.scale === scaleFactor;
+              let scaleBg = 'rgba(255,255,255,0.02)';
+              if (isSelected) scaleBg = 'rgba(56, 189, 248, 0.15)';
+              else if (isSupported) scaleBg = 'var(--bg-surface)';
+
+              let scaleColor = 'var(--text-muted)';
+              if (isSelected) scaleColor = 'var(--cyan-400)';
+              else if (isSupported) scaleColor = 'var(--text-primary)';
+
               return (
                 <button
                   key={scaleFactor}
@@ -178,16 +189,8 @@ export function ControlPanel({
                     border: isSelected
                       ? '1px solid var(--cyan-400)'
                       : '1px solid rgba(255,255,255,0.08)',
-                    backgroundColor: isSelected
-                      ? 'rgba(56, 189, 248, 0.15)'
-                      : isSupported
-                      ? 'var(--bg-surface)'
-                      : 'rgba(255,255,255,0.02)',
-                    color: isSelected
-                      ? 'var(--cyan-400)'
-                      : isSupported
-                      ? 'var(--text-primary)'
-                      : 'var(--text-muted)',
+                    backgroundColor: scaleBg,
+                    color: scaleColor,
                     fontWeight: 700,
                     fontSize: '0.9rem',
                     fontFamily: 'var(--font-mono)',
@@ -205,9 +208,9 @@ export function ControlPanel({
 
         {/* Tiling Size */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             VRAM Tiling Size
-          </label>
+          </span>
           <select
             value={config.tile_size}
             disabled={disabled}
@@ -234,9 +237,9 @@ export function ControlPanel({
 
         {/* Concurrency Threads */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             Thread Concurrency (-j)
-          </label>
+          </span>
           <select
             value={config.threads || '1:2:2'}
             disabled={disabled}
@@ -253,9 +256,9 @@ export function ControlPanel({
               cursor: disabled ? 'not-allowed' : 'pointer',
             }}
           >
-            {THREAD_PRESETS.map((opt) => (
-              <option key={opt.value} value={opt.value} style={{ backgroundColor: 'var(--bg-surface)' }}>
-                {opt.label} — {opt.desc}
+            {THREAD_PRESETS.map((preset) => (
+              <option key={preset.value} value={preset.value} style={{ backgroundColor: 'var(--bg-surface)' }}>
+                {preset.label} — {preset.desc}
               </option>
             ))}
           </select>
@@ -320,9 +323,11 @@ export function ControlPanel({
       >
         <Sparkles size={18} />
         <span>
-          {stagedCount === 0
-            ? 'Stage Images Above to Begin'
-            : `Upscale ${stagedCount} Image${stagedCount > 1 ? 's' : ''} (${config.scale}x)`}
+          {(() => {
+            if (stagedCount === 0) return 'Stage Images Above to Begin';
+            if (stagedCount === 1) return `Upscale 1 Image (${config.scale}x)`;
+            return `Upscale ${stagedCount} Images (${config.scale}x)`;
+          })()}
         </span>
       </button>
     </div>

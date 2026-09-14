@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import shutil
@@ -43,19 +44,19 @@ from app.models import (
     AVAILABLE_MODELS,
     BatchCreateResponse,
     BatchItemResponse,
-    ItemStatus,
     JobResponse,
     ModelMetadata,
     SystemHealthResponse,
+    ItemStatus,
 )
 from app.queue import job_manager
 from app.utils import (
     cleanup_stale_jobs,
-    create_batch_zip,
     get_process_memory_mb,
     get_storage_usage_mb,
     sanitize_filename,
     validate_image_file,
+    create_batch_zip,
 )
 
 logging.basicConfig(
@@ -74,9 +75,9 @@ async def periodic_cleanup_task():
             if pruned > 0:
                 logger.info(f"Auto-cleanup purged {pruned} stale job directories")
         except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.error(f"Error during scheduled cleanup: {e}")
+            raise
+        except Exception:
+            logger.exception("Error during scheduled cleanup")
 
 
 @asynccontextmanager
@@ -89,10 +90,8 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     cleanup_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await cleanup_task
-    except asyncio.CancelledError:
-        pass
     logger.info("ScaleUp backend shut down")
 
 
@@ -153,7 +152,23 @@ async def get_models():
     return AVAILABLE_MODELS
 
 
-@app.post("/api/jobs/batch", response_model=BatchCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+async def _stream_save_file(file: UploadFile, target_path: Path) -> int:
+    file_bytes = 0
+    async with aiofiles.open(target_path, "wb") as f_out:
+        while chunk := await file.read(1024 * 1024):
+            file_bytes += len(chunk)
+            if file_bytes > MAX_SINGLE_FILE_SIZE_BYTES:
+                break
+            await f_out.write(chunk)
+    return file_bytes
+
+
+@app.post(
+    "/api/jobs/batch",
+    response_model=BatchCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={400: {"description": "Invalid batch parameters, empty payload, or size limit exceeded"}},
+)
 async def create_batch_job(
     files: List[UploadFile] = File(...),
     model: str = Form("realesrgan-x4plus"),
@@ -200,27 +215,19 @@ async def create_batch_job(
         stored_name = f"{item_id}_{clean_filename}"
         target_path = job_upload_dir / stored_name
 
-        # Stream save file to disk in chunks to avoid large memory allocations
-        file_bytes = 0
-        async with aiofiles.open(target_path, "wb") as f_out:
-            while chunk := await file.read(1024 * 1024):  # 1MB chunks
-                file_bytes += len(chunk)
-                if file_bytes > MAX_SINGLE_FILE_SIZE_BYTES:
-                    break
-                await f_out.write(chunk)
+        file_bytes = await _stream_save_file(file, target_path)
 
         total_payload_bytes += file_bytes
         if total_payload_bytes > MAX_BATCH_PAYLOAD_SIZE_BYTES:
             shutil.rmtree(job_upload_dir, ignore_errors=True)
             raise HTTPException(
                 status_code=400,
-                detail=f"Total batch size exceeded maximum allowance of 500 MB.",
+                detail="Total batch size exceeded maximum allowance of 500 MB.",
             )
 
         # Pre-flight image validation
         is_valid, err_msg, meta = validate_image_file(target_path)
         if not is_valid:
-            # File is corrupted, 0 bytes, or invalid format
             items.append(
                 BatchItemResponse(
                     item_id=item_id,
@@ -236,10 +243,8 @@ async def create_batch_job(
             warnings.append(f"File '{original_filename}' rejected: {err_msg}")
             continue
 
-        # Check for dimension warning
         if meta and meta.get("warning"):
             warnings.append(f"'{original_filename}': {meta['warning']}")
-            # Auto-clamp tile size if requested tile size is too large for 4K
             if meta.get("recommended_tile") and tile_size > meta["recommended_tile"]:
                 tile_size = meta["recommended_tile"]
 
@@ -262,7 +267,6 @@ async def create_batch_job(
             f"Batch contains {len(files)} items (recommended max: {MAX_RECOMMENDED_BATCH_ITEMS}). Processing may take longer."
         )
 
-    # Initialize Job context and launch asynchronous worker
     ctx = job_manager.create_job(
         job_id=job_id,
         model=model,
@@ -284,7 +288,11 @@ async def create_batch_job(
     )
 
 
-@app.get("/api/jobs/{job_id}", response_model=JobResponse)
+@app.get(
+    "/api/jobs/{job_id}",
+    response_model=JobResponse,
+    responses={404: {"description": "Job not found"}},
+)
 async def get_job_status(job_id: str):
     """Retrieves current execution status, telemetry progress, and item results for a job."""
     ctx = job_manager.get_job(job_id)
@@ -293,7 +301,10 @@ async def get_job_status(job_id: str):
     return ctx.to_response()
 
 
-@app.get("/api/jobs/{job_id}/events")
+@app.get(
+    "/api/jobs/{job_id}/events",
+    responses={404: {"description": "Job not found"}},
+)
 async def stream_job_events(request: Request, job_id: str):
     """Server-Sent Events (SSE) endpoint for real-time progress and telemetry updates."""
     ctx = job_manager.get_job(job_id)
@@ -303,7 +314,10 @@ async def stream_job_events(request: Request, job_id: str):
     return EventSourceResponse(job_manager.subscribe_events(job_id))
 
 
-@app.post("/api/jobs/{job_id}/cancel")
+@app.post(
+    "/api/jobs/{job_id}/cancel",
+    responses={404: {"description": "Job not found"}},
+)
 async def cancel_job(job_id: str):
     """Aborts an active batch job immediately and terminates child processes."""
     ctx = job_manager.get_job(job_id)
@@ -314,7 +328,13 @@ async def cancel_job(job_id: str):
     return {"job_id": job_id, "cancelled": success, "status": ctx.status}
 
 
-@app.get("/api/jobs/{job_id}/export")
+@app.get(
+    "/api/jobs/{job_id}/export",
+    responses={
+        400: {"description": "No successfully processed images to export"},
+        404: {"description": "Job not found"},
+    },
+)
 async def export_batch_zip(job_id: str):
     """Downloads a consolidated ZIP archive containing all successfully processed images."""
     ctx = job_manager.get_job(job_id)
@@ -325,7 +345,6 @@ async def export_batch_zip(job_id: str):
     zip_path = job_output_dir / f"upscaled_batch_{job_id}.zip"
 
     if not zip_path.exists():
-        # Build zip if not already pre-built
         successful_files = []
         for item in ctx.items:
             if item.status == ItemStatus.SUCCESS.value and item.upscaled_name:

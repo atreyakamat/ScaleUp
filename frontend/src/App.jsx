@@ -1,28 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   Zap,
-  Sliders,
-  Download,
   Terminal,
   Layers,
   Copy,
   Check,
   Shield,
   Activity,
-  Maximize2,
-  Columns,
-  Eye,
   Github,
   ChevronDown,
   ChevronUp,
-  Cpu,
   HardDrive,
   CheckCircle2,
   ArrowRight,
-  ExternalLink,
-  Laptop,
-  Image as ImageIcon,
 } from 'lucide-react';
 
 import { CompareSlider } from './components/CompareSlider';
@@ -509,9 +500,9 @@ export default function App() {
                   title: '100% Air-Gapped Privacy',
                   desc: 'Zero telemetry, zero cloud dependencies. Your photos, wallpapers, and confidential assets stay securely on your physical machine at all times.',
                 },
-              ].map((feat, idx) => (
+              ].map((feat) => (
                 <div
-                  key={idx}
+                  key={feat.title}
                   className="glass-panel glass-panel-hover"
                   style={{
                     padding: '1.75rem',
@@ -582,8 +573,8 @@ export default function App() {
                   { metric: 'Desktop Crash Risk', pytorch: 'High (OOM kills Wayland)', cloud: 'None', scaleup: 'Zero (Tile clamped)' },
                   { metric: 'Data Privacy', pytorch: 'Local, but heavy dependencies', cloud: 'Uploaded to 3rd party', scaleup: '100% Offline & Air-Gapped' },
                   { metric: 'Software Cost', pytorch: 'Free (High electricity)', cloud: '$19 – $39 / month', scaleup: '100% Free (MIT Licensed)' },
-                ].map((row, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(56, 189, 248, 0.08)' }}>
+                ].map((row) => (
+                  <tr key={row.metric} style={{ borderBottom: '1px solid rgba(56, 189, 248, 0.08)' }}>
                     <td style={{ padding: '1rem 1.25rem', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.metric}</td>
                     <td style={{ padding: '1rem 1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{row.pytorch}</td>
                     <td style={{ padding: '1rem 1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{row.cloud}</td>
@@ -878,7 +869,7 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {FAQS.map((faq, idx) => (
                 <div
-                  key={idx}
+                  key={faq.q}
                   className="glass-panel"
                   style={{
                     borderRadius: 'var(--radius-md)',

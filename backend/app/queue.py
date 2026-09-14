@@ -155,6 +155,58 @@ class JobManager:
         ctx.broadcast_event("cancelled")
         return True
 
+    @staticmethod
+    def _resolve_output_filename(original_name: str) -> str:
+        stem = Path(original_name).stem
+        ext = Path(original_name).suffix.lower()
+        if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
+            ext = ".png"
+        return f"upscaled_{stem}{ext}"
+
+    async def _process_single_item(
+        self,
+        ctx: JobContext,
+        item: JobItem,
+        job_upload_dir: Path,
+        job_output_dir: Path,
+    ) -> bool:
+        input_path = job_upload_dir / item.stored_name
+        upscaled_filename = self._resolve_output_filename(item.original_name)
+        output_path = job_output_dir / upscaled_filename
+
+        result = await ctx.engine.upscale_image(
+            input_path=input_path,
+            output_path=output_path,
+            model_name=ctx.model,
+            scale=ctx.scale,
+            tile_size=ctx.tile_size,
+            gpu_id=ctx.gpu_id,
+            threads=ctx.threads,
+            cancel_event=ctx.cancel_event,
+        )
+
+        if ctx.cancel_event.is_set():
+            item.status = ItemStatus.CANCELLED.value
+            item.error_message = "Job cancelled during processing"
+            return False
+
+        if result.success:
+            item.status = ItemStatus.SUCCESS.value
+            item.upscaled_name = upscaled_filename
+            item.duration_seconds = result.duration_seconds
+            item.preview_url = f"/static/outputs/{ctx.job_id}/{upscaled_filename}"
+            item.original_url = f"/static/uploads/{ctx.job_id}/{item.stored_name}"
+            item.output_width = result.output_width
+            item.output_height = result.output_height
+            item.file_size_bytes = result.file_size_bytes
+            item.tile_size_used = result.tile_size_used
+            return True
+
+        item.status = ItemStatus.FAILED.value
+        item.error_message = result.error_message
+        item.original_url = f"/static/uploads/{ctx.job_id}/{item.stored_name}"
+        return False
+
     async def _process_job(self, ctx: JobContext):
         job_upload_dir = UPLOADS_DIR / ctx.job_id
         job_output_dir = OUTPUTS_DIR / ctx.job_id
@@ -175,7 +227,6 @@ class JobManager:
                 break
 
             if item.status == ItemStatus.SKIPPED_INVALID.value:
-                # Already validated as bad input before queue
                 failed_count += 1
                 ctx.progress.current_index = idx + 1
                 ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
@@ -188,58 +239,23 @@ class JobManager:
             ctx.progress.percentage = round((idx / total) * 100, 1)
             ctx.progress.elapsed_seconds = round(time.time() - start_time, 1)
 
-            # Calculate ETA based on average duration so far
             if processed_durations:
                 avg_dur = sum(processed_durations) / len(processed_durations)
-                remaining_items = total - idx
-                ctx.progress.eta_seconds = round(avg_dur * remaining_items, 1)
+                ctx.progress.eta_seconds = round(avg_dur * (total - idx), 1)
             else:
                 ctx.progress.eta_seconds = None
 
             ctx.broadcast_event("item_start")
 
-            input_path = job_upload_dir / item.stored_name
-            # Preserve original stem and extension or default to .png
-            stem = Path(item.original_name).stem
-            ext = Path(item.original_name).suffix.lower()
-            if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
-                ext = ".png"
-            upscaled_filename = f"upscaled_{stem}{ext}"
-            output_path = job_output_dir / upscaled_filename
-
-            # Perform inference
-            result = await ctx.engine.upscale_image(
-                input_path=input_path,
-                output_path=output_path,
-                model_name=ctx.model,
-                scale=ctx.scale,
-                tile_size=ctx.tile_size,
-                gpu_id=ctx.gpu_id,
-                threads=ctx.threads,
-                cancel_event=ctx.cancel_event,
-            )
-
+            succeeded = await self._process_single_item(ctx, item, job_upload_dir, job_output_dir)
             if ctx.cancel_event.is_set():
-                item.status = ItemStatus.CANCELLED.value
-                item.error_message = "Job cancelled during processing"
                 break
 
-            if result.success:
-                item.status = ItemStatus.SUCCESS.value
-                item.upscaled_name = upscaled_filename
-                item.duration_seconds = result.duration_seconds
-                item.preview_url = f"/static/outputs/{ctx.job_id}/{upscaled_filename}"
-                item.original_url = f"/static/uploads/{ctx.job_id}/{item.stored_name}"
-                item.output_width = result.output_width
-                item.output_height = result.output_height
-                item.file_size_bytes = result.file_size_bytes
-                item.tile_size_used = result.tile_size_used
-                processed_durations.append(result.duration_seconds)
+            if succeeded:
                 success_count += 1
+                if item.duration_seconds:
+                    processed_durations.append(item.duration_seconds)
             else:
-                item.status = ItemStatus.FAILED.value
-                item.error_message = result.error_message
-                item.original_url = f"/static/uploads/{ctx.job_id}/{item.stored_name}"
                 failed_count += 1
 
             ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
@@ -272,8 +288,8 @@ class JobManager:
                             successful_files.append((file_p, item.upscaled_name))
                 if successful_files:
                     ctx.zip_path = create_batch_zip(ctx.job_id, successful_files, job_output_dir)
-            except Exception as e:
-                logger.error(f"Failed to create ZIP package: {e}")
+            except Exception:
+                logger.exception("Failed to create ZIP package")
 
         ctx.broadcast_event("complete")
 
