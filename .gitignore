@@ -23,3 +23,6 @@ backend/storage/outputs/*
 .DS_Store
 .vscode/
 .idea/
+
+# SonarQube scanner cache
+.sonar/
