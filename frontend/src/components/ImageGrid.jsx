@@ -5,10 +5,8 @@ import {
   Clock,
   Download,
   Split,
-  Eye,
   Loader2,
   XCircle,
-  FileCheck,
 } from 'lucide-react';
 
 export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, Zap, Layers, Sparkles, Sliders, ShieldCheck, Activity } from 'lucide-react';
+import { Cpu, Zap, Sparkles, Sliders, ShieldCheck, Activity } from 'lucide-react';
 
 const TILE_OPTIONS = [
   { value: 128, label: '128px (Recommended for Vega 8)', desc: 'Optimal stability & vibrant output on AMD RADV' },
@@ -214,7 +214,7 @@ export function ControlPanel({
           <select
             value={config.tile_size}
             disabled={disabled}
-            onChange={(e) => onConfigChange({ ...config, tile_size: parseInt(e.target.value) })}
+            onChange={(e) => onConfigChange({ ...config, tile_size: Number.parseInt(e.target.value, 10) })}
             style={{
               padding: '0.65rem 0.8rem',
               borderRadius: 'var(--radius-sm)',

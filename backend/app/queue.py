@@ -82,7 +82,7 @@ class JobContext:
             "event": event_type,
             "data": self.to_response().model_dump(),
         }
-        for q in list(self.subscribers):
+        for q in self.subscribers.copy():
             try:
                 q.put_nowait(payload)
             except Exception:

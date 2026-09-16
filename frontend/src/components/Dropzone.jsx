@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, X, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
+import { Upload, X, AlertTriangle } from 'lucide-react';
 
 const SUPPORTED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
 const MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -19,67 +19,71 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        const dim = { width: img.naturalWidth, height: img.naturalHeight };
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
         URL.revokeObjectURL(url);
-        resolve(dim);
       };
       img.onerror = () => {
-        URL.revokeObjectURL(url);
         resolve(null);
+        URL.revokeObjectURL(url);
       };
       img.src = url;
     });
   };
 
-  const processFiles = async (rawFiles) => {
+  const validateFile = (file) => {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+      return `Unsupported format "${ext}". Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`;
+    }
+    if (file.size === 0) {
+      return 'File is empty (0 bytes).';
+    }
+    if (file.size > MAX_SINGLE_FILE_SIZE) {
+      return `File exceeds max size of 50 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
+    }
+    return null;
+  };
+
+  const processFiles = async (newFiles) => {
     setDragError(null);
-    const newStaged = [...stagedFiles];
-    let totalSize = stagedFiles.reduce((acc, item) => acc + item.file.size, 0);
+    if (!newFiles.length) return;
 
-    for (const file of rawFiles) {
-      const ext = '.' + file.name.split('.').pop().toLowerCase();
-      if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-        setDragError(`Unsupported format "${ext}". Allowed: ${SUPPORTED_EXTENSIONS.join(', ')}`);
-        continue;
-      }
+    const currentTotalSize = stagedFiles.reduce((acc, item) => acc + item.file.size, 0);
+    const addedSize = newFiles.reduce((acc, f) => acc + f.size, 0);
 
-      if (file.size === 0) {
-        setDragError(`Skipped empty 0-byte file: ${file.name}`);
-        continue;
-      }
-
-      if (file.size > MAX_SINGLE_FILE_SIZE) {
-        setDragError(`File "${file.name}" exceeds 50 MB limit.`);
-        continue;
-      }
-
-      if (totalSize + file.size > MAX_BATCH_SIZE) {
-        setDragError('Total batch payload exceeds 500 MB limit.');
-        break;
-      }
-
-      // Check if already in staged
-      const exists = newStaged.some(
-        (item) => item.file.name === file.name && item.file.size === file.size
-      );
-      if (exists) continue;
-
-      const previewUrl = URL.createObjectURL(file);
-      const dimensions = await inspectImageDimensions(file);
-      const is4K = dimensions && dimensions.width * dimensions.height > 3840 * 2160;
-
-      newStaged.push({
-        id: `${file.name}-${file.size}-${Date.now()}-${crypto.randomUUID()}`,
-        file,
-        previewUrl,
-        dimensions,
-        is4K,
-      });
-
-      totalSize += file.size;
+    if (currentTotalSize + addedSize > MAX_BATCH_SIZE) {
+      setDragError('Total batch size exceeds the 500 MB limit.');
+      return;
     }
 
-    onFilesChange(newStaged);
+    const processed = [];
+    for (const file of newFiles) {
+      const error = validateFile(file);
+      let dimensions = null;
+      let previewUrl = null;
+
+      if (!error) {
+        dimensions = await inspectImageDimensions(file);
+        previewUrl = URL.createObjectURL(file);
+      }
+
+      // Cryptographically secure random ID
+      const randomValues = new Uint32Array(2);
+      crypto.getRandomValues(randomValues);
+      const id = `${Date.now()}-${randomValues[0].toString(36)}${randomValues[1].toString(36)}`;
+
+      processed.push({
+        id,
+        file,
+        name: file.name,
+        size: file.size,
+        dimensions,
+        previewUrl,
+        error,
+      });
+    }
+
+    onFilesChange([...stagedFiles, ...processed]);
   };
 
   const handleDragOver = (e) => {
@@ -114,7 +118,7 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
 
   const removeFile = (idToRemove) => {
     const item = stagedFiles.find((i) => i.id === idToRemove);
-    if (item && item.previewUrl) {
+    if (item?.previewUrl) {
       URL.revokeObjectURL(item.previewUrl);
     }
     onFilesChange(stagedFiles.filter((i) => i.id !== idToRemove));
@@ -133,23 +137,31 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".png,.jpg,.jpeg,.webp,.bmp,image/png,image/jpeg,image/webp,image/bmp"
+        onChange={handleFileInputChange}
+        style={{ display: 'none' }}
+        disabled={disabled}
+      />
+
       {/* Drop Target Area */}
-      <div
-        role="button"
-        tabIndex={disabled ? -1 : 0}
+      <button
+        type="button"
         aria-label="Upload image dropzone"
-        onKeyDown={(e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
-            e.preventDefault();
-            fileInputRef.current?.click();
-          }
-        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !disabled && fileInputRef.current?.click()}
+        disabled={disabled}
         className="glass-panel"
         style={{
+          width: '100%',
+          display: 'block',
+          font: 'inherit',
+          color: 'inherit',
           border: isDragging ? '2px dashed var(--cyan-400)' : '2px dashed rgba(255,255,255,0.12)',
           borderRadius: 'var(--radius-lg)',
           padding: '2.5rem 1.5rem',
@@ -159,16 +171,6 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
           backgroundColor: isDragging ? 'rgba(56, 189, 248, 0.06)' : 'var(--bg-card)',
         }}
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".png,.jpg,.jpeg,.webp,.bmp,image/png,image/jpeg,image/webp,image/bmp"
-          onChange={handleFileInputChange}
-          style={{ display: 'none' }}
-          disabled={disabled}
-        />
-
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
           <div
             style={{
@@ -234,7 +236,7 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
             </span>
           </div>
         </div>
-      </div>
+      </button>
 
       {dragError && (
         <div

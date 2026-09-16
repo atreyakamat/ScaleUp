@@ -4,13 +4,8 @@ import {
   Download,
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Minimize2,
   Columns,
   Split,
-  Eye,
-  Info,
-  Move,
 } from 'lucide-react';
 
 export function CompareSlider({ item, onClose }) {
@@ -86,12 +81,20 @@ export function CompareSlider({ item, onClose }) {
     setIsPanning(false);
   };
 
-  const handlePanStart = (e) => {
-    if (e.button === 0 && !e.target.closest('.slider-handle') && zoom > 1) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX, y: e.clientY });
-    }
-  };
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onMouseDown = (e) => {
+      if (e.button === 0 && !e.target.closest('.slider-handle') && zoom > 1) {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX, y: e.clientY });
+      }
+    };
+    el.addEventListener('mousedown', onMouseDown);
+    return () => {
+      el.removeEventListener('mousedown', onMouseDown);
+    };
+  }, [zoom]);
 
   const resetZoomPan = () => {
     setZoom(1);
@@ -318,11 +321,9 @@ export function CompareSlider({ item, onClose }) {
       </div>
 
       {/* Main Comparison Canvas Viewport */}
-      <div
+      <section
         ref={containerRef}
-        role="region"
         aria-label="Image comparison viewport"
-        onMouseDown={handlePanStart}
         style={{
           flex: 1,
           position: 'relative',
@@ -579,7 +580,7 @@ export function CompareSlider({ item, onClose }) {
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Bottom Hint Banner */}
       <div

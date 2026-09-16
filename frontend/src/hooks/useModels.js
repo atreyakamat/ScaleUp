@@ -67,6 +67,7 @@ export function useModels() {
       }
     } catch (err) {
       // Backend not available or CORS/mixed content on static host
+      console.debug('Health check failed:', err);
       setIsConnected(false);
       setHealth(null);
     }

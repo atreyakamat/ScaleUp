@@ -17,6 +17,8 @@ from app.config import (
 
 logger = logging.getLogger("scaleup.engine")
 
+MSG_JOB_CANCELLED = "Job was cancelled"
+
 
 class InferenceResult:
     def __init__(
@@ -45,24 +47,6 @@ class NCNNEngine:
         self.binary_path = BINARY_PATH
         self.models_dir = MODELS_DIR
         self.active_process: Optional[asyncio.subprocess.Process] = None
-
-    async def upscale_image(
-        self,
-        input_path: Path,
-        output_path: Path,
-        model_name: str = "realesrgan-x4plus",
-        scale: int = 4,
-        tile_size: int = DEFAULT_TILE_SIZE,
-        gpu_id: int = DEFAULT_GPU_ID,
-        threads: str = DEFAULT_THREADS,
-        cancel_event: Optional[asyncio.Event] = None,
-    ) -> InferenceResult:
-        """
-        Executes NCNN Vulkan upscale inference on input_path -> output_path.
-        Includes automatic model tile clamping and black-image detection recovery.
-        """
-        if cancel_event and cancel_event.is_set():
-            return InferenceResult(success=False, error_message="Job was cancelled")
 
     @staticmethod
     def _clamp_tile_size(model_name: str, tile_size: int) -> int:
@@ -103,7 +87,7 @@ class NCNNEngine:
         Includes automatic model tile clamping and black-image detection recovery.
         """
         if cancel_event and cancel_event.is_set():
-            return InferenceResult(success=False, error_message="Job was cancelled")
+            return InferenceResult(success=False, error_message=MSG_JOB_CANCELLED)
 
         current_tile = self._clamp_tile_size(model_name, tile_size)
 
@@ -268,14 +252,17 @@ class NCNNEngine:
         start_time = time.perf_counter()
         try:
             if cancel_event and cancel_event.is_set():
-                return InferenceResult(success=False, error_message="Job was cancelled")
+                return InferenceResult(success=False, error_message=MSG_JOB_CANCELLED)
 
-            with Image.open(input_path) as img:
-                w, h = img.size
-                new_w, new_h = w * scale, h * scale
-                # High quality resampling
-                upscaled = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                upscaled.save(output_path, quality=95)
+            def _do_cpu_resize():
+                with Image.open(input_path) as img:
+                    w, h = img.size
+                    new_w, new_h = w * scale, h * scale
+                    upscaled = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    upscaled.save(output_path, quality=95)
+                return new_w, new_h
+
+            new_w, new_h = await asyncio.to_thread(_do_cpu_resize)
 
             duration = time.perf_counter() - start_time
             return InferenceResult(

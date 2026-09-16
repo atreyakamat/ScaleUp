@@ -1,9 +1,9 @@
 import React from 'react';
-import { Loader2, StopCircle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { Loader2, StopCircle, Clock, CheckCircle2 } from 'lucide-react';
 
 export function ProgressBar({ progress, status, onCancel }) {
   const formatTime = (seconds) => {
-    if (seconds == null || isNaN(seconds)) return '--:--';
+    if (seconds == null || Number.isNaN(seconds)) return '--:--';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
