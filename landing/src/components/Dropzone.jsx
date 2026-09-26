@@ -3,8 +3,7 @@ import { Upload, X, AlertTriangle } from 'lucide-react';
 
 const SUPPORTED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
 const MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const MAX_BATCH_SIZE = 2048 * 1024 * 1024; // 2048 MB (2 GB)
-const MAX_BATCH_COUNT = 1000;
+const MAX_BATCH_SIZE = 500 * 1024 * 1024; // 500 MB
 
 export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -49,38 +48,29 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
     setDragError(null);
     if (!newFiles.length) return;
 
-    if (stagedFiles.length + newFiles.length > MAX_BATCH_COUNT) {
-      setDragError(`Total batch items exceed maximum limit of ${MAX_BATCH_COUNT} images.`);
-      return;
-    }
-
     const currentTotalSize = stagedFiles.reduce((acc, item) => acc + item.file.size, 0);
     const addedSize = newFiles.reduce((acc, f) => acc + f.size, 0);
 
     if (currentTotalSize + addedSize > MAX_BATCH_SIZE) {
-      setDragError('Total batch size exceeds the 2 GB limit.');
+      setDragError('Total batch size exceeds the 500 MB limit.');
       return;
     }
 
     const processed = [];
-    // For large payloads (e.g. 500 images), inspect dimensions for first 40 to avoid memory lockup
-    for (let i = 0; i < newFiles.length; i++) {
-      const file = newFiles[i];
+    for (const file of newFiles) {
       const error = validateFile(file);
       let dimensions = null;
       let previewUrl = null;
 
       if (!error) {
-        if (i < 40) {
-          dimensions = await inspectImageDimensions(file);
-        }
+        dimensions = await inspectImageDimensions(file);
         previewUrl = URL.createObjectURL(file);
       }
 
       // Cryptographically secure random ID
       const randomValues = new Uint32Array(2);
       crypto.getRandomValues(randomValues);
-      const id = `${Date.now()}-${randomValues[0].toString(36)}${randomValues[1].toString(36)}-${i}`;
+      const id = `${Date.now()}-${randomValues[0].toString(36)}${randomValues[1].toString(36)}`;
 
       processed.push({
         id,
@@ -242,7 +232,7 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
                 border: '1px solid rgba(56,189,248,0.2)',
               }}
             >
-              Max 50MB / img • 500+ batch limit (2GB payload)
+              Max 50MB / img • 500MB batch
             </span>
           </div>
         </div>
@@ -324,7 +314,7 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
               padding: '0.25rem',
             }}
           >
-            {stagedFiles.slice(0, 60).map((item) => (
+            {stagedFiles.map((item) => (
               <div
                 key={item.id}
                 className="glass-panel"
@@ -424,29 +414,6 @@ export function Dropzone({ stagedFiles, onFilesChange, disabled }) {
                 )}
               </div>
             ))}
-            {stagedFiles.length > 60 && (
-              <div
-                className="glass-panel"
-                style={{
-                  borderRadius: 'var(--radius-md)',
-                  padding: '1rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  backgroundColor: 'rgba(56, 189, 248, 0.05)',
-                  border: '1px dashed rgba(56, 189, 248, 0.3)',
-                }}
-              >
-                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--cyan-400)' }}>
-                  +{stagedFiles.length - 60} More Images
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  All {stagedFiles.length} images staged & ready to upscale
-                </span>
-              </div>
-            )}
           </div>
         </div>
       )}

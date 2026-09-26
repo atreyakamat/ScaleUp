@@ -34,6 +34,7 @@ from app.config import (
     MAX_SINGLE_FILE_SIZE_BYTES,
     MAX_BATCH_PAYLOAD_SIZE_BYTES,
     MAX_RECOMMENDED_BATCH_ITEMS,
+    MAX_BATCH_ITEMS,
     DEFAULT_TILE_SIZE,
     DEFAULT_GPU_ID,
     DEFAULT_THREADS,
@@ -163,6 +164,77 @@ async def _stream_save_file(file: UploadFile, target_path: Path) -> int:
     return file_bytes
 
 
+def _validate_batch_request(files: List[UploadFile], model: str, scale: int):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+
+    if len(files) > MAX_BATCH_ITEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Batch size ({len(files)} items) exceeds maximum allowed limit of {MAX_BATCH_ITEMS} items.",
+        )
+
+    valid_model_ids = {m.id for m in AVAILABLE_MODELS}
+    if model not in valid_model_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model '{model}'. Valid options: {', '.join(sorted(valid_model_ids))}",
+        )
+
+    selected_model_meta = next(m for m in AVAILABLE_MODELS if m.id == model)
+    if scale not in selected_model_meta.scales:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scale {scale} for model {model}. Supported scales: {selected_model_meta.scales}",
+        )
+
+
+async def _ingest_file(
+    file: UploadFile,
+    idx: int,
+    job_id: str,
+    job_upload_dir: Path,
+) -> Tuple[BatchItemResponse, Optional[str], Optional[int], int]:
+    original_filename = file.filename or f"image_{idx+1}.png"
+    clean_filename = sanitize_filename(original_filename)
+    item_id = str(uuid.uuid4())
+    stored_name = f"{item_id}_{clean_filename}"
+    target_path = job_upload_dir / stored_name
+
+    file_bytes = await _stream_save_file(file, target_path)
+
+    is_valid, err_msg, meta = validate_image_file(target_path)
+    if not is_valid:
+        item = BatchItemResponse(
+            item_id=item_id,
+            original_name=original_filename,
+            stored_name=stored_name,
+            status=ItemStatus.SKIPPED_INVALID.value,
+            error_message=err_msg,
+            preview_url=None,
+            original_url=f"/static/uploads/{job_id}/{stored_name}",
+            file_size_bytes=file_bytes,
+        )
+        warning = f"File '{original_filename}' rejected: {err_msg}"
+        return item, warning, None, file_bytes
+
+    warning = f"'{original_filename}': {meta['warning']}" if meta and meta.get("warning") else None
+    rec_tile = meta.get("recommended_tile") if meta else None
+
+    item = BatchItemResponse(
+        item_id=item_id,
+        original_name=original_filename,
+        stored_name=stored_name,
+        status=ItemStatus.QUEUED.value,
+        preview_url=None,
+        original_url=f"/static/uploads/{job_id}/{stored_name}",
+        input_width=meta.get("width") if meta else None,
+        input_height=meta.get("height") if meta else None,
+        file_size_bytes=file_bytes,
+    )
+    return item, warning, rec_tile, file_bytes
+
+
 @app.post(
     "/api/jobs/batch",
     response_model=BatchCreateResponse,
@@ -181,24 +253,7 @@ async def create_batch_job(
     Ingests batch of uploaded images, performs pre-flight validation,
     and enqueues the job for background NCNN Vulkan processing.
     """
-    if not files or len(files) == 0:
-        raise HTTPException(status_code=400, detail="No files uploaded.")
-
-    # Validate model
-    valid_model_ids = {m.id for m in AVAILABLE_MODELS}
-    if model not in valid_model_ids:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model '{model}'. Valid options: {', '.join(sorted(valid_model_ids))}",
-        )
-
-    # Validate scale
-    selected_model_meta = next(m for m in AVAILABLE_MODELS if m.id == model)
-    if scale not in selected_model_meta.scales:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid scale {scale} for model {model}. Supported scales: {selected_model_meta.scales}",
-        )
+    _validate_batch_request(files, model, scale)
 
     job_id = str(uuid.uuid4())
     job_upload_dir = UPLOADS_DIR / job_id
@@ -209,58 +264,23 @@ async def create_batch_job(
     total_payload_bytes = 0
 
     for idx, file in enumerate(files):
-        original_filename = file.filename or f"image_{idx+1}.png"
-        clean_filename = sanitize_filename(original_filename)
-        item_id = str(uuid.uuid4())
-        stored_name = f"{item_id}_{clean_filename}"
-        target_path = job_upload_dir / stored_name
-
-        file_bytes = await _stream_save_file(file, target_path)
-
+        item, warning, rec_tile, file_bytes = await _ingest_file(
+            file, idx, job_id, job_upload_dir
+        )
         total_payload_bytes += file_bytes
         if total_payload_bytes > MAX_BATCH_PAYLOAD_SIZE_BYTES:
             shutil.rmtree(job_upload_dir, ignore_errors=True)
+            max_mb = MAX_BATCH_PAYLOAD_SIZE_BYTES // (1024 * 1024)
             raise HTTPException(
                 status_code=400,
-                detail="Total batch size exceeded maximum allowance of 500 MB.",
+                detail=f"Total batch size exceeded maximum allowance of {max_mb} MB.",
             )
 
-        # Pre-flight image validation
-        is_valid, err_msg, meta = validate_image_file(target_path)
-        if not is_valid:
-            items.append(
-                BatchItemResponse(
-                    item_id=item_id,
-                    original_name=original_filename,
-                    stored_name=stored_name,
-                    status=ItemStatus.SKIPPED_INVALID.value,
-                    error_message=err_msg,
-                    preview_url=None,
-                    original_url=f"/static/uploads/{job_id}/{stored_name}",
-                    file_size_bytes=file_bytes,
-                )
-            )
-            warnings.append(f"File '{original_filename}' rejected: {err_msg}")
-            continue
-
-        if meta and meta.get("warning"):
-            warnings.append(f"'{original_filename}': {meta['warning']}")
-            if meta.get("recommended_tile") and tile_size > meta["recommended_tile"]:
-                tile_size = meta["recommended_tile"]
-
-        items.append(
-            BatchItemResponse(
-                item_id=item_id,
-                original_name=original_filename,
-                stored_name=stored_name,
-                status=ItemStatus.QUEUED.value,
-                preview_url=None,
-                original_url=f"/static/uploads/{job_id}/{stored_name}",
-                input_width=meta.get("width") if meta else None,
-                input_height=meta.get("height") if meta else None,
-                file_size_bytes=file_bytes,
-            )
-        )
+        items.append(item)
+        if warning:
+            warnings.append(warning)
+        if rec_tile and tile_size > rec_tile:
+            tile_size = rec_tile
 
     if len(files) > MAX_RECOMMENDED_BATCH_ITEMS:
         warnings.append(

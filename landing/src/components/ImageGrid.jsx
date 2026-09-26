@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle,
   AlertCircle,
@@ -7,65 +7,17 @@ import {
   Split,
   Loader2,
   XCircle,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  CheckSquare,
 } from 'lucide-react';
 
 export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) {
   const [filter, setFilter] = useState('all'); // 'all' | 'success' | 'failed'
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState('48'); // '24' | '48' | '96' | 'all'
 
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      if (filter === 'success' && item.status !== 'success') return false;
-      if (
-        filter === 'failed' &&
-        !['failed', 'skipped_invalid', 'cancelled'].includes(item.status)
-      ) {
-        return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesOriginal = item.original_name.toLowerCase().includes(q);
-        const matchesUpscaled = item.upscaled_name?.toLowerCase().includes(q);
-        if (!matchesOriginal && !matchesUpscaled) return false;
-      }
-      return true;
-    });
-  }, [items, filter, searchQuery]);
-
-  const totalPages = useMemo(() => {
-    if (pageSize === 'all') return 1;
-    const sizeNum = Number.parseInt(pageSize, 10);
-    return Math.max(1, Math.ceil(filteredItems.length / sizeNum));
-  }, [filteredItems.length, pageSize]);
-
-  // Clamp current page if items change
-  const safePage = Math.min(currentPage, totalPages);
-
-  const paginatedItems = useMemo(() => {
-    if (pageSize === 'all') return filteredItems;
-    const sizeNum = Number.parseInt(pageSize, 10);
-    const start = (safePage - 1) * sizeNum;
-    return filteredItems.slice(start, start + sizeNum);
-  }, [filteredItems, safePage, pageSize]);
-
-  const toggleSelectAllPage = () => {
-    const pageSuccessIds = paginatedItems
-      .filter((i) => i.status === 'success')
-      .map((i) => i.item_id);
-    const allSelected = pageSuccessIds.every((id) => selectedIds.includes(id));
-    if (allSelected) {
-      onSelectionChange(selectedIds.filter((id) => !pageSuccessIds.includes(id)));
-    } else {
-      const merged = Array.from(new Set([...selectedIds, ...pageSuccessIds]));
-      onSelectionChange(merged);
-    }
-  };
+  const filteredItems = items.filter((item) => {
+    if (filter === 'success') return item.status === 'success';
+    if (filter === 'failed')
+      return ['failed', 'skipped_invalid', 'cancelled'].includes(item.status);
+    return true;
+  });
 
   const toggleSelect = (itemId) => {
     if (selectedIds.includes(itemId)) {
@@ -209,7 +161,7 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* Controls Bar: Filters, Search, Page Size */}
+      {/* Filter Tabs Header */}
       <div
         style={{
           display: 'flex',
@@ -219,12 +171,9 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
           gap: '0.75rem',
         }}
       >
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
-            onClick={() => {
-              setFilter('all');
-              setCurrentPage(1);
-            }}
+            onClick={() => setFilter('all')}
             style={{
               padding: '0.4rem 0.8rem',
               borderRadius: '6px',
@@ -239,10 +188,7 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
             All Items ({items.length})
           </button>
           <button
-            onClick={() => {
-              setFilter('success');
-              setCurrentPage(1);
-            }}
+            onClick={() => setFilter('success')}
             style={{
               padding: '0.4rem 0.8rem',
               borderRadius: '6px',
@@ -258,10 +204,7 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
           </button>
           {failCount > 0 && (
             <button
-              onClick={() => {
-                setFilter('failed');
-                setCurrentPage(1);
-              }}
+              onClick={() => setFilter('failed')}
               style={{
                 padding: '0.4rem 0.8rem',
                 borderRadius: '6px',
@@ -276,160 +219,8 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
               Errors / Skipped ({failCount})
             </button>
           )}
-
-          {successCount > 0 && (
-            <button
-              onClick={toggleSelectAllPage}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.4rem 0.8rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
-                backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                color: 'var(--cyan-400)',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-              title="Select / deselect all completed items on this page"
-            >
-              <CheckSquare size={14} />
-              <span>Select Page</span>
-            </button>
-          )}
-        </div>
-
-        {/* Search & Pagination Settings */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {items.length > 10 && (
-            <div
-              style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <Search
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: '0.6rem',
-                  color: 'var(--text-muted)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search images..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  padding: '0.35rem 0.6rem 0.35rem 1.8rem',
-                  fontSize: '0.8rem',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: 'var(--bg-surface-raised)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                  width: '160px',
-                }}
-              />
-            </div>
-          )}
-
-          {filteredItems.length > 24 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              <span>Show:</span>
-              {['24', '48', '96', 'all'].map((sz) => (
-                <button
-                  key={sz}
-                  onClick={() => {
-                    setPageSize(sz);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    background: pageSize === sz ? 'var(--cyan-500)' : 'var(--bg-surface-raised)',
-                    color: pageSize === sz ? '#fff' : 'var(--text-secondary)',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '0.2rem 0.45rem',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {sz === 'all' ? 'All' : sz}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Pagination Navigation Bar */}
-      {pageSize !== 'all' && totalPages > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '0.4rem 0.75rem',
-            borderRadius: '6px',
-            backgroundColor: 'var(--bg-surface-raised)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            fontSize: '0.8rem',
-          }}
-        >
-          <span style={{ color: 'var(--text-muted)' }}>
-            Showing {((safePage - 1) * Number.parseInt(pageSize, 10)) + 1}–{Math.min(safePage * Number.parseInt(pageSize, 10), filteredItems.length)} of {filteredItems.length} items
-          </span>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0.25rem 0.5rem',
-                borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'none',
-                color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text-primary)',
-                cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
-                opacity: safePage <= 1 ? 0.4 : 1,
-              }}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span style={{ fontWeight: 600, color: 'var(--cyan-400)', minWidth: '60px', textAlign: 'center' }}>
-              {safePage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0.25rem 0.5rem',
-                borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'none',
-                color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
-                cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
-                opacity: safePage >= totalPages ? 0.4 : 1,
-              }}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Cards Grid */}
       <div
@@ -439,7 +230,7 @@ export function ImageGrid({ items, onCompare, selectedIds, onSelectionChange }) 
           gap: '1.25rem',
         }}
       >
-        {paginatedItems.map((item) => {
+        {filteredItems.map((item) => {
           const isSelected = selectedIds.includes(item.item_id);
           const hasOutput = item.status === 'success' && item.preview_url;
 

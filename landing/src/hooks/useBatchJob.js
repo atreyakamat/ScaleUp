@@ -66,7 +66,7 @@ export function useBatchJob(apiUrl = '') {
       const es = new EventSource(streamEndpoint);
       eventSourceRef.current = es;
 
-      const handlePayload = (event) => {
+      es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           setJobState((prev) => ({
@@ -84,11 +84,6 @@ export function useBatchJob(apiUrl = '') {
           console.error('SSE JSON parse error:', e);
         }
       };
-
-      es.onmessage = handlePayload;
-      ['init', 'start', 'item_start', 'item_skip', 'item_done', 'complete', 'cancelled', 'update'].forEach((evt) => {
-        es.addEventListener(evt, handlePayload);
-      });
 
       es.onerror = () => {
         es.close();

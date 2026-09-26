@@ -8,9 +8,12 @@ backend/venv/
 .coverage
 coverage.xml
 
-# Node / Frontend
+# Node / Frontend & Landing
 frontend/node_modules/
 frontend/.vite/
+landing/node_modules/
+landing/.vite/
+landing/dist/
 
 # Storage & Runtime Scratch
 backend/storage/uploads/*

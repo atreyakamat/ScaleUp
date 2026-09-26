@@ -1,5 +1,6 @@
 backend/venv/
 frontend/node_modules/
+landing/
 .git/
 .pytest_cache/
 __pycache__/

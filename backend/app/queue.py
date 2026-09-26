@@ -5,12 +5,18 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, AsyncGenerator
 
+from collections import deque
+import gc
+
 from app.config import (
     UPLOADS_DIR,
     OUTPUTS_DIR,
     DEFAULT_GPU_ID,
     DEFAULT_THREADS,
     DEFAULT_TILE_SIZE,
+    BATCH_GC_INTERVAL,
+    MIN_SSE_BROADCAST_INTERVAL_SECONDS,
+    PROCESS_RAM_BUDGET_MB,
 )
 from app.models import (
     ItemStatus,
@@ -20,9 +26,41 @@ from app.models import (
     JobResponse,
 )
 from app.engine import NCNNEngine
-from app.utils import create_batch_zip
+from app.utils import create_batch_zip, get_process_memory_mb
 
 logger = logging.getLogger("scaleup.queue")
+
+
+class RollingEtaEstimator:
+    """
+    Calculates smooth, outlier-resistant ETA using a bounded sliding window
+    and exponential moving average. Essential for stable ETAs in 500+ item batches.
+    """
+
+    def __init__(self, window_size: int = 15, alpha: float = 0.3):
+        self.window_size = window_size
+        self.alpha = alpha
+        self.history: deque = deque(maxlen=window_size)
+        self.ema: Optional[float] = None
+
+    def record_duration(self, duration: float):
+        if duration <= 0:
+            return
+        self.history.append(duration)
+        if self.ema is None:
+            self.ema = duration
+        else:
+            self.ema = (self.alpha * duration) + ((1.0 - self.alpha) * self.ema)
+
+    def estimate_remaining(self, remaining_items: int) -> Optional[float]:
+        if remaining_items <= 0:
+            return 0.0
+        if not self.history:
+            return None
+        durations = sorted(self.history)
+        median_dur = durations[len(durations) // 2]
+        effective_dur = (0.7 * (self.ema or median_dur)) + (0.3 * median_dur)
+        return round(effective_dur * remaining_items, 1)
 
 
 class JobContext:
@@ -48,6 +86,7 @@ class JobContext:
         self.status = JobOverallStatus.QUEUED.value
         self.created_at = time.time()
         self.completed_at: Optional[float] = None
+        self.last_broadcast_time: float = 0.0
         self.progress = JobProgress(
             current_index=0,
             total_items=len(items),
@@ -77,7 +116,14 @@ class JobContext:
             warnings=self.warnings,
         )
 
-    def broadcast_event(self, event_type: str = "update"):
+    def broadcast_event(self, event_type: str = "update", force: bool = False):
+        now = time.time()
+        # Milestone events are always broadcast immediately; high-frequency events are rate-limited
+        if not force and event_type not in ["start", "complete", "cancelled", "failed", "init"]:
+            if now - self.last_broadcast_time < MIN_SSE_BROADCAST_INTERVAL_SECONDS:
+                return
+        self.last_broadcast_time = now
+
         payload = {
             "event": event_type,
             "data": self.to_response().model_dump(),
@@ -207,6 +253,84 @@ class JobManager:
         item.original_url = f"/static/uploads/{ctx.job_id}/{item.stored_name}"
         return False
 
+    @staticmethod
+    def _recycle_memory_if_needed(idx: int, total: int):
+        if (idx + 1) % BATCH_GC_INTERVAL == 0 or (idx + 1) == total:
+            gc.collect()
+            rss_mb = get_process_memory_mb()
+            if rss_mb > PROCESS_RAM_BUDGET_MB * 0.85:
+                logger.warning(
+                    "Process RSS (%.1f MB) approaching budget (%d MB) at item %d/%d; invoking full cycle GC.",
+                    rss_mb,
+                    PROCESS_RAM_BUDGET_MB,
+                    idx + 1,
+                    total,
+                )
+                gc.collect(2)
+
+    @staticmethod
+    def _determine_final_status(cancelled: bool, success_count: int, failed_count: int) -> str:
+        if cancelled:
+            return JobOverallStatus.CANCELLED.value
+        if failed_count == 0 and success_count > 0:
+            return JobOverallStatus.COMPLETED.value
+        if success_count > 0 and failed_count > 0:
+            return JobOverallStatus.PARTIAL_FAILURE.value
+        return JobOverallStatus.FAILED.value
+
+    @staticmethod
+    def _build_zip_package(ctx: JobContext, job_output_dir: Path):
+        try:
+            successful_files = [
+                (job_output_dir / item.upscaled_name, item.upscaled_name)
+                for item in ctx.items
+                if item.status == ItemStatus.SUCCESS.value
+                and item.upscaled_name
+                and (job_output_dir / item.upscaled_name).exists()
+            ]
+            if successful_files:
+                ctx.zip_path = create_batch_zip(ctx.job_id, successful_files, job_output_dir)
+        except Exception:
+            logger.exception("Failed to create ZIP package")
+
+    async def _process_item_step(
+        self,
+        ctx: JobContext,
+        item: BatchItemResponse,
+        idx: int,
+        total: int,
+        start_time: float,
+        eta_estimator: RollingEtaEstimator,
+        job_upload_dir: Path,
+        job_output_dir: Path,
+    ) -> bool:
+        if item.status == ItemStatus.SKIPPED_INVALID.value:
+            ctx.progress.current_index = idx + 1
+            ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
+            ctx.broadcast_event("item_skip")
+            return False
+
+        item.status = ItemStatus.PROCESSING.value
+        ctx.progress.current_index = idx + 1
+        ctx.progress.current_file = item.original_name
+        ctx.progress.percentage = round((idx / total) * 100, 1)
+        ctx.progress.elapsed_seconds = round(time.time() - start_time, 1)
+        ctx.progress.eta_seconds = eta_estimator.estimate_remaining(total - idx)
+        ctx.broadcast_event("item_start")
+
+        succeeded = await self._process_single_item(ctx, item, job_upload_dir, job_output_dir)
+        if ctx.cancel_event.is_set():
+            return False
+
+        if succeeded and item.duration_seconds:
+            eta_estimator.record_duration(item.duration_seconds)
+
+        ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
+        ctx.progress.elapsed_seconds = round(time.time() - start_time, 1)
+        ctx.progress.eta_seconds = eta_estimator.estimate_remaining(total - (idx + 1))
+        ctx.broadcast_event("item_done")
+        return succeeded
+
     async def _process_job(self, ctx: JobContext):
         job_upload_dir = UPLOADS_DIR / ctx.job_id
         job_output_dir = OUTPUTS_DIR / ctx.job_id
@@ -214,84 +338,42 @@ class JobManager:
 
         ctx.status = JobOverallStatus.PROCESSING.value
         start_time = time.time()
-        processed_durations: List[float] = []
+        eta_estimator = RollingEtaEstimator(window_size=20, alpha=0.25)
 
         total = len(ctx.items)
         success_count = 0
         failed_count = 0
 
-        ctx.broadcast_event("start")
+        ctx.broadcast_event("start", force=True)
 
         for idx, item in enumerate(ctx.items):
             if ctx.cancel_event.is_set():
                 break
 
-            if item.status == ItemStatus.SKIPPED_INVALID.value:
-                failed_count += 1
-                ctx.progress.current_index = idx + 1
-                ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
-                ctx.broadcast_event("item_skip")
-                continue
-
-            item.status = ItemStatus.PROCESSING.value
-            ctx.progress.current_index = idx + 1
-            ctx.progress.current_file = item.original_name
-            ctx.progress.percentage = round((idx / total) * 100, 1)
-            ctx.progress.elapsed_seconds = round(time.time() - start_time, 1)
-
-            if processed_durations:
-                avg_dur = sum(processed_durations) / len(processed_durations)
-                ctx.progress.eta_seconds = round(avg_dur * (total - idx), 1)
-            else:
-                ctx.progress.eta_seconds = None
-
-            ctx.broadcast_event("item_start")
-
-            succeeded = await self._process_single_item(ctx, item, job_upload_dir, job_output_dir)
+            succeeded = await self._process_item_step(
+                ctx, item, idx, total, start_time, eta_estimator, job_upload_dir, job_output_dir
+            )
             if ctx.cancel_event.is_set():
                 break
 
             if succeeded:
                 success_count += 1
-                if item.duration_seconds:
-                    processed_durations.append(item.duration_seconds)
             else:
                 failed_count += 1
 
-            ctx.progress.percentage = round(((idx + 1) / total) * 100, 1)
-            ctx.progress.elapsed_seconds = round(time.time() - start_time, 1)
-            ctx.broadcast_event("item_done")
+            self._recycle_memory_if_needed(idx, total)
 
         ctx.completed_at = time.time()
         ctx.progress.elapsed_seconds = round(ctx.completed_at - start_time, 1)
         ctx.progress.current_file = None
         ctx.progress.eta_seconds = 0.0
 
-        # Determine overall job status
-        if ctx.cancel_event.is_set():
-            ctx.status = JobOverallStatus.CANCELLED.value
-        elif failed_count == 0 and success_count > 0:
-            ctx.status = JobOverallStatus.COMPLETED.value
-        elif success_count > 0 and failed_count > 0:
-            ctx.status = JobOverallStatus.PARTIAL_FAILURE.value
-        else:
-            ctx.status = JobOverallStatus.FAILED.value
+        ctx.status = self._determine_final_status(ctx.cancel_event.is_set(), success_count, failed_count)
 
-        # Pre-generate ZIP bundle for fast download if any images succeeded
         if success_count > 0:
-            try:
-                successful_files = []
-                for item in ctx.items:
-                    if item.status == ItemStatus.SUCCESS.value and item.upscaled_name:
-                        file_p = job_output_dir / item.upscaled_name
-                        if file_p.exists():
-                            successful_files.append((file_p, item.upscaled_name))
-                if successful_files:
-                    ctx.zip_path = create_batch_zip(ctx.job_id, successful_files, job_output_dir)
-            except Exception:
-                logger.exception("Failed to create ZIP package")
+            self._build_zip_package(ctx, job_output_dir)
 
-        ctx.broadcast_event("complete")
+        ctx.broadcast_event("complete", force=True)
 
     async def subscribe_events(self, job_id: str) -> AsyncGenerator[dict, None]:
         ctx = self.get_job(job_id)

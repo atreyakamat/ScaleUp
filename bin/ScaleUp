@@ -341,7 +341,7 @@ case "$1" in
     help|--help|-h)
         show_help
         ;;
-    "")
+    run|"")
         start_fg
         ;;
     *)

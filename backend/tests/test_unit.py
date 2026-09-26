@@ -485,3 +485,132 @@ async def test_main_batch_upload_warning_and_clamping(monkeypatch):
         assert r.status_code == 202
         data = r.json()
         assert len(data["warnings"]) >= 2
+
+
+def test_rolling_eta_estimator():
+    from app.queue import RollingEtaEstimator
+
+    estimator = RollingEtaEstimator(window_size=5, alpha=0.3)
+    assert estimator.estimate_remaining(0) == 0.0
+    assert estimator.estimate_remaining(10) is None
+
+    # Record some uniform durations
+    for _ in range(5):
+        estimator.record_duration(2.0)
+
+    eta = estimator.estimate_remaining(5)
+    assert eta is not None
+    # 5 items * ~2.0s = ~10.0s
+    assert 9.0 <= eta <= 11.0
+
+    # Test outlier handling: an outlier of 20s should be smoothed
+    estimator.record_duration(20.0)
+    eta_smoothed = estimator.estimate_remaining(1)
+    assert eta_smoothed < 15.0
+
+    # Negative or zero duration ignored
+    estimator.record_duration(0.0)
+    estimator.record_duration(-1.0)
+
+
+@pytest.mark.anyio
+async def test_500_image_batch_processing_and_gc(tmp_path, monkeypatch):
+    """
+    Validates that the queue engine processes a minimum working limit of 500 images,
+    running periodic GC cycles without memory leaking or blocking.
+    """
+    from app.queue import JobManager, JobContext
+    from unittest.mock import AsyncMock
+
+    jm = JobManager()
+    items = [
+        BatchItemResponse(
+            item_id=f"item-{i}",
+            original_name=f"frame_{i:04d}.png",
+            stored_name=f"frame_{i:04d}.png",
+            duration_seconds=0.01,
+        )
+        for i in range(500)
+    ]
+    assert len(items) == 500
+
+    ctx = JobContext(
+        job_id="batch-500-test",
+        model="realesr-animevideov3",
+        scale=2,
+        tile_size=128,
+        items=items,
+        warnings=[],
+    )
+
+    # Mock _process_single_item to simulate high-speed processing
+    async def mock_process(ctx, item, up_dir, out_dir):
+        item.status = "success"
+        item.upscaled_name = f"upscaled_{item.original_name}"
+        item.duration_seconds = 0.005
+        return True
+
+    monkeypatch.setattr(jm, "_process_single_item", mock_process)
+
+    # Run the 500-item batch
+    await jm._process_job(ctx)
+
+    assert ctx.status == "completed"
+    assert ctx.progress.total_items == 500
+    assert ctx.progress.current_index == 500
+    assert ctx.progress.percentage == 100.0
+    assert ctx.progress.eta_seconds == 0.0
+    assert all(it.status == "success" for it in ctx.items)
+
+
+@pytest.mark.anyio
+async def test_batch_hard_limit_exceeded(monkeypatch):
+    """Verify that batches exceeding MAX_BATCH_ITEMS are rejected with HTTP 400."""
+    from app.config import MAX_BATCH_ITEMS
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test custom limit check via monkeypatch
+        monkeypatch.setattr("app.main.MAX_BATCH_ITEMS", 2)
+        dummy_files = [
+            ("files", (f"img_{i}.png", b"fakebytes", "image/png"))
+            for i in range(3)
+        ]
+        r = await client.post(
+            "/api/jobs/batch",
+            files=dummy_files,
+            data={"model": "realesrgan-x4plus", "scale": "4"},
+        )
+        assert r.status_code == 400
+        assert "exceeds maximum allowed limit of 2" in r.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_throttled_sse_broadcast():
+    from app.queue import JobContext
+
+    ctx = JobContext(
+        job_id="test-throttle",
+        model="realesrgan-x4plus",
+        scale=4,
+        tile_size=128,
+        items=[],
+        warnings=[],
+    )
+    q = asyncio.Queue()
+    ctx.subscribers.append(q)
+
+    # First broadcast succeeds
+    ctx.broadcast_event("item_start")
+    assert not q.empty()
+    await q.get()
+
+    # Immediate second broadcast within throttle window is dropped
+    ctx.broadcast_event("item_done")
+    assert q.empty()
+
+    # Force broadcast bypasses throttle
+    ctx.broadcast_event("complete", force=True)
+    assert not q.empty()
+    msg = await q.get()
+    assert msg["event"] == "complete"

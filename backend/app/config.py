@@ -45,8 +45,11 @@ SUPPORTED_MIME_TYPES = {
 
 # Operational limits & budgets
 MAX_SINGLE_FILE_SIZE_BYTES = 50 * 1024 * 1024       # 50 MB
-MAX_BATCH_PAYLOAD_SIZE_BYTES = 500 * 1024 * 1024    # 500 MB
-MAX_RECOMMENDED_BATCH_ITEMS = 50
+MAX_BATCH_PAYLOAD_SIZE_BYTES = 2048 * 1024 * 1024  # 2048 MB (2 GB)
+MAX_RECOMMENDED_BATCH_ITEMS = 500                   # Support 500 images minimum
+MAX_BATCH_ITEMS = 1000                              # Safety ceiling
+BATCH_GC_INTERVAL = 25                              # Periodic GC cleanup interval in items
+MIN_SSE_BROADCAST_INTERVAL_SECONDS = 0.25           # Minimum interval between heavy telemetry broadcasts
 
 # Hardware & Tiling Defaults (Optimized for Ryzen 7 7730U + Vega 8 RADV)
 DEFAULT_GPU_ID = 0
