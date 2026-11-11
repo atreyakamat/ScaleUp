@@ -212,7 +212,7 @@ class JobManager:
     async def _process_single_item(
         self,
         ctx: JobContext,
-        item: JobItem,
+        item: BatchItemResponse,
         job_upload_dir: Path,
         job_output_dir: Path,
     ) -> bool:

@@ -6,7 +6,7 @@ import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import aiofiles
 from fastapi import (
@@ -103,11 +103,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Enable CORS for frontend Vite dev server and local access
+# CORS: the built app is served from this same server, so only the Vite dev
+# server needs cross-origin access. "*" let any website you visit call this API
+# from your browser (start jobs, read results, wipe storage via /api/system/cleanup).
+# Add more origins with SCALEUP_CORS_ORIGINS="http://a:1,http://b:2".
+_cors_origins = [
+    o.strip().rstrip("/")
+    for o in os.environ.get(
+        "SCALEUP_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+    if o.strip() and o.strip() != "*"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
