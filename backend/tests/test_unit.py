@@ -464,6 +464,18 @@ async def test_process_single_item_cancel_and_failure(tmp_path):
 async def test_main_batch_upload_warning_and_clamping(monkeypatch):
     monkeypatch.setattr("app.main.MAX_RECOMMENDED_BATCH_ITEMS", 1)
 
+    # This test checks the upload warnings only. Without a GPU the queued job would fall
+    # back to a CPU resize of two 3850x2170 images x4 in a worker thread, and the event
+    # loop can't close until that finishes (CI hung for an hour). Stand in for the
+    # per-item work, as test_500_image_batch_processing_and_gc does.
+    from app.queue import job_manager
+
+    async def quick_item(ctx, item, up_dir, out_dir):
+        item.status = "success"
+        return True
+
+    monkeypatch.setattr(job_manager, "_process_single_item", quick_item)
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         # High-res image triggers tile clamp warning

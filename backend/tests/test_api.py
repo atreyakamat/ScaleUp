@@ -5,6 +5,7 @@ import httpx
 import anyio
 from PIL import Image
 from app.main import app
+from app.engine import InferenceResult, NCNNEngine
 
 def create_test_image(width=100, height=100, fmt="PNG", color=(255, 0, 0)):
     buf = io.BytesIO()
@@ -12,6 +13,28 @@ def create_test_image(width=100, height=100, fmt="PNG", color=(255, 0, 0)):
     img.save(buf, format=fmt)
     buf.seek(0)
     return buf.getvalue()
+
+@pytest.fixture
+def fake_upscaler(monkeypatch):
+    """Stand-in for the NCNN Vulkan binary, which needs a GPU that CI runners
+    don't have. It resizes the image with Pillow so the API, queue, output
+    files and ZIP export are still tested end to end."""
+
+    async def fake_upscale(self, input_path, output_path, scale=4, tile_size=0, **_kwargs):
+        with Image.open(input_path) as img:
+            out = img.convert("RGB").resize((img.width * scale, img.height * scale))
+        out.save(output_path)
+        return InferenceResult(
+            success=True,
+            output_path=output_path,
+            tile_size_used=tile_size,
+            output_width=out.width,
+            output_height=out.height,
+            file_size_bytes=output_path.stat().st_size,
+        )
+
+    monkeypatch.setattr(NCNNEngine, "upscale_image", fake_upscale)
+
 
 @pytest.mark.anyio
 async def test_health_endpoint():
@@ -40,7 +63,7 @@ async def test_models_endpoint():
         assert "realesr-animevideov3" in model_ids
 
 @pytest.mark.anyio
-async def test_batch_upload_and_processing():
+async def test_batch_upload_and_processing(fake_upscaler):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         img_png = create_test_image(64, 64, fmt="PNG")
@@ -85,7 +108,7 @@ async def test_batch_upload_and_processing():
         assert len(zip_resp.content) > 0
 
 @pytest.mark.anyio
-async def test_corrupt_and_zero_byte_rejection():
+async def test_corrupt_and_zero_byte_rejection(fake_upscaler):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         valid_png = create_test_image(50, 50, fmt="PNG")
